@@ -17,7 +17,8 @@ Prices come from Auctionator (or TSM if installed). Flipper never buys anything 
 
 ## Getting Started
 
-1. The addon folder `Flipper/` is linked into `_forever_\Interface\AddOns\Flipper`. Restart the game fully the first time (a `/reload` doesn't pick up new addon folders).
+1. At the auction house Flipper is a tab along the bottom, next to Auctionator's; anywhere else `/flip` opens it as a window.
+2. The addon folder `Flipper/` is linked into `_forever_\Interface\AddOns\Flipper`. Restart the game fully the first time (a `/reload` doesn't pick up new addon folders).
 2. Scan the AH once with Auctionator so Flipper has prices.
 3. Open each profession window once (Tailoring, Enchanting, Cooking...) so Flipper learns your recipes.
 4. Commands:
