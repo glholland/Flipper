@@ -36,6 +36,10 @@ function Recipes.Capture()
     if not saved or not T or not T.GetFilteredRecipeIDs or not T.GetRecipeSchematic then return 0 end
     local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
     local profession = base and base.professionName or "?"
+    if base and ns.IsNumber(base.skillLevel) and FlipperCharDB then
+        FlipperCharDB.professions = FlipperCharDB.professions or {}
+        FlipperCharDB.professions[profession] = base.skillLevel
+    end
     local count = 0
     for _, id in ipairs(T.GetFilteredRecipeIDs() or {}) do
         local info = T.GetRecipeInfo(id)

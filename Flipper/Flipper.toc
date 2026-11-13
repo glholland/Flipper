@@ -9,6 +9,7 @@
 ## SavedVariablesPerCharacter: FlipperCharDB
 
 Core\Init.lua
+Data\RecipeDB.lua
 Core\Money.lua
 Core\Logic.lua
 Core\Compat.lua
@@ -16,6 +17,7 @@ Core\Prices.lua
 Core\Recipes.lua
 Core\Bags.lua
 Core\Scanner.lua
+Core\RecipeShop.lua
 UI\Window.lua
 UI\Tooltip.lua
 Flipper.lua

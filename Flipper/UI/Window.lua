@@ -9,6 +9,10 @@ local COLUMNS = {
     flips  = {"Item", "AH min", "Vendor", "Profit/ea", "Listed"},
     bags   = {"Item", "Best use", "Per unit", "Total", ""},
     crafts = {"Recipe", "Cost", "Value", "Profit", ""},
+    recipes = {"Recipe for sale", "AH price", "Profit/craft", "Pays back", "Skill"},
+}
+local RECIPE_STATUS = {
+    learnable = "|cff4ade80%d|r", skill = "|cfff87171%d|r", other = "|cff9ca3af%d|r", unverified = "|cfffbbf24%d?|r",
 }
 local COLUMN_X = {34, 250, 340, 430, 515}
 local ACTION_TEXT = {ah = "|cff60a5faAuction|r", vendor = "Vendor", craft = "|cff4ade80Craft|r", none = "|cff9ca3af-|r"}
@@ -45,6 +49,7 @@ end
 function Window.Data()
     if Window.tab == "flips" then return ns.Scanner.rows end
     if Window.tab == "bags" then return ns.Bags.Rows() end
+    if Window.tab == "recipes" then return ns.RecipeShop.Rows() end
     return craftRows()
 end
 
@@ -65,6 +70,12 @@ local function fill(row, data)
         cells[2]:SetText(advice.action == "craft" and (ACTION_TEXT.craft .. ": " .. advice.craftName) or ACTION_TEXT[advice.action])
         cells[3]:SetText(Money.Format(advice.perUnit))
         cells[4]:SetText(Money.Format(data.total))
+    elseif Window.tab == "recipes" then
+        cells[1]:SetText(qualityName(data))
+        cells[2]:SetText(Money.Format(data.price))
+        cells[3]:SetText("|cff4ade80" .. Money.Format(data.profit) .. "|r")
+        cells[4]:SetText(data.payback and (data.payback .. (data.payback == 1 and " craft" or " crafts")) or "")
+        cells[5]:SetText(string.format(RECIPE_STATUS[data.status], data.skill))
     else
         local m = data.margin
         cells[1]:SetText(qualityName(data))
@@ -98,6 +109,10 @@ function Window.Refresh()
         end
         frame.scan:SetEnabled(ns.Compat.AuctionHouseOpen() and not s.running)
         frame.scan:Show()
+    elseif Window.tab == "recipes" then
+        status = #data .. " money-making recipes you don't know" .. (ns.RecipeShop.showAll and " (all professions)" or "")
+            .. ". Skill: |cff4ade80can learn|r |cfff87171need skill|r |cfffbbf24open profession once|r"
+        frame.scan:Hide()
     elseif Window.tab == "crafts" then
         status = #data == 0 and "Open each profession window once to teach Flipper your recipes." or (#data .. " recipes, AH prices from " .. (ns.Prices.Source() or "nothing"))
         frame.scan:Hide()
@@ -129,12 +144,14 @@ local function createRow(parent, index)
         if not self.data or not self.data.itemID then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetItemByID(self.data.itemID)
-        if Window.tab == "flips" then GameTooltip:AddLine("Click: open in Auctionator to buy", 0.3, 0.9, 0.5) end
+        if Window.tab == "flips" or Window.tab == "recipes" then
+            GameTooltip:AddLine("Click: open in Auctionator to buy", 0.3, 0.9, 0.5)
+        end
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
     row:SetScript("OnClick", function(self)
-        if Window.tab == "flips" and self.data then ns.Scanner.OpenInAuctionator(self.data) end
+        if (Window.tab == "flips" or Window.tab == "recipes") and self.data then ns.Scanner.OpenInAuctionator(self.data) end
     end)
     return row
 end
@@ -158,7 +175,7 @@ function Window.Create()
     frame.title:SetText("Flipper")
 
     frame.tabs = {}
-    for i, key in ipairs({"flips", "bags", "crafts"}) do
+    for i, key in ipairs({"flips", "bags", "crafts", "recipes"}) do
         local tab = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
         tab:SetSize(80, 22)
         tab:SetPoint("TOPLEFT", 12 + (i - 1) * 84, -28)

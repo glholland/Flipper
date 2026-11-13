@@ -12,7 +12,25 @@ function events.ADDON_LOADED(name)
     ns.Scanner.OnChanged = refresh
     ns.Tooltip.Install()
 end
-function events.PLAYER_LOGIN() ns.Scanner.InstallHooks() end
+
+-- After every Auctionator scan: refresh the window and point out the best opportunities.
+local function onPricesUpdated()
+    ns.Prices.ClearCache()
+    refresh()
+    local best = ns.RecipeShop.Rows()[1]
+    if best and best.status == "learnable" then
+        ns.Print(string.format("new prices: %s on the AH makes %s per craft (/flip recipes)",
+            best.name, ns.Money.Format(best.profit)))
+    end
+end
+function events.PLAYER_LOGIN()
+    ns.Scanner.InstallHooks()
+    ns.RecipeShop.Professions()
+    local api = Auctionator and Auctionator.API and Auctionator.API.v1
+    if api and api.RegisterForDBUpdate then
+        pcall(api.RegisterForDBUpdate, ns.CALLER_ID, onPricesUpdated)
+    end
+end
 function events.AUCTION_HOUSE_SHOW() ns.Scanner.InstallHooks(); refresh() end
 function events.AUCTION_HOUSE_CLOSED() ns.Scanner.OnEvent("AUCTION_HOUSE_CLOSED"); ns.Prices.ClearCache(); refresh() end
 events.AUCTION_HOUSE_BROWSE_RESULTS_UPDATED = function() ns.Scanner.OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED") end
@@ -54,6 +72,8 @@ local commands = {
     flips = function() ns.Window.Toggle("flips") end,
     bags = function() ns.Window.Toggle("bags") end,
     crafts = function() ns.Window.Toggle("crafts") end,
+    recipes = function() ns.Window.Toggle("recipes") end,
+    verify = function() ns.RecipeShop.Verify() end,
     scan = function() ns.Window.Toggle("flips"); ns.Scanner.Start() end,
     tooltip = function()
         FlipperDB.tooltip = not FlipperDB.tooltip
@@ -61,12 +81,17 @@ local commands = {
     end,
 }
 local function help()
-    ns.Print("/flip - window | /flip scan | /flip bags | /flip crafts | /flip tooltip | /flip minprofit <copper>")
+    ns.Print("/flip - window | /flip scan | /flip bags | /flip crafts | /flip recipes [all] | /flip verify | /flip tooltip | /flip minprofit <copper>")
 end
 SLASH_FLIPPER1 = "/flip"
 SLASH_FLIPPER2 = "/flipper"
 SlashCmdList.FLIPPER = function(message)
     local command, arg = strtrim(message or ""):lower():match("^(%S*)%s*(.-)$")
+    if command == "recipes" and arg == "all" then
+        ns.RecipeShop.showAll = not ns.RecipeShop.showAll
+        ns.Window.Toggle("recipes")
+        return
+    end
     if command == "minprofit" then
         local copper = tonumber(arg)
         if copper and copper >= 1 then

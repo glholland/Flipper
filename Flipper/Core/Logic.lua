@@ -64,6 +64,23 @@ function Logic.ReagentValue(recipe, reagentID, priceFn, cut)
     return math.floor((outputPrice * averageQuantity(recipe) - others) / used)
 end
 
+-- How many crafts it takes for a recipe bought at `recipePrice` to pay for itself, or nil
+-- when crafting it doesn't make money.
+function Logic.Payback(recipePrice, profitPerCraft)
+    recipePrice, profitPerCraft = num(recipePrice), num(profitPerCraft)
+    if not recipePrice or not profitPerCraft or profitPerCraft <= 0 then return nil end
+    return math.max(1, math.ceil(recipePrice / profitPerCraft))
+end
+
+-- Expands a RecipeDB entry {profession, skill, name, output, qtyMin, qtyMax, {id, qty, ...}}
+-- into the recipe shape CraftMargin takes.
+function Logic.RecipeFromDB(entry)
+    local reagents, flat = {}, entry[7] or {}
+    for i = 1, #flat - 1, 2 do reagents[#reagents + 1] = {flat[i], flat[i + 1]} end
+    return {profession = entry[1], skill = entry[2], name = entry[3], output = entry[4],
+        qtyMin = entry[5], qtyMax = entry[6], reagents = reagents}
+end
+
 -- Picks the best thing to do with one unit of an item.
 -- opts = {ah=market price|nil, vendor=sell price|nil, crafts={{name, perUnit}}, cut}
 -- Ties go to the vendor: instant and no listing risk.

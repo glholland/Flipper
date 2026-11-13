@@ -63,6 +63,17 @@ eq("best use nothing priced", b.action, "none")
 b = Logic.BestUse{ah = 200, vendor = 0, crafts = {}, cut = 0.05}
 eq("best use unsellable to vendor", b.action, "ah")
 
+-- Payback / RecipeFromDB
+eq("payback rounds up", Logic.Payback(1000, 300), 4)
+eq("payback at least one craft", Logic.Payback(100, 500), 1)
+eq("payback losing recipe", Logic.Payback(1000, -5), nil)
+eq("payback unpriced", Logic.Payback(nil, 50), nil)
+local r = Logic.RecipeFromDB({"Tailoring", 80, "Gray Woolen Robe", 2585, 1, 1, {2997, 4, 2321, 3, 4340, 1}})
+eq("db profession", r.profession, "Tailoring")
+eq("db output", r.output, 2585)
+eq("db reagent count", #r.reagents, 3)
+eq("db reagent pair", r.reagents[2][1] .. "x" .. r.reagents[2][2], "2321x3")
+
 -- Money
 local function plain(s) return (s:gsub("|T.-|t", "")) end
 eq("money full", plain(Money.Format(12345)), "1g 23s 45c")
