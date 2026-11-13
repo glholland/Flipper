@@ -61,7 +61,18 @@ end
 -- {{itemID, name, icon, quality, price, profit, payback, profession, skill, status}} sorted by profit.
 -- status: "learnable" (your profession, skill high enough), "skill" (need more skill),
 -- "other" (not your profession; only with showAll), "unverified" (profession window never opened).
+-- Cached briefly: 1,600 recipes are priced per build. Invalidate() after new prices.
+local cachedRows, cachedAt, cachedFilter = nil, 0, nil
+function Shop.Invalidate() cachedRows = nil end
+
 function Shop.Rows()
+    local filter = Shop.Filter()
+    if cachedRows and cachedFilter == filter and GetTime() - cachedAt < 10 then return cachedRows end
+    cachedRows, cachedAt, cachedFilter = Shop.BuildRows(), GetTime(), filter
+    return cachedRows
+end
+
+function Shop.BuildRows()
     local professions = Shop.Professions()
     local known, scanned = knownNames()
     local filter = Shop.Filter()

@@ -252,7 +252,9 @@ function Vendors.FlipRows()
             end
         end
     end
-    -- Don't cache a list with holes; item info arrives within a second or two.
-    if not missingInfo then cachedRows, cachedAt = rows, GetTime() end
+    -- A list with items still loading is kept briefly, then rebuilt once their info is in.
+    -- Never rebuild on every arriving item: that's thousands of rebuilds.
+    cachedRows = rows
+    cachedAt = missingInfo and (GetTime() - ROWS_SECONDS + 5) or GetTime()
     return rows
 end

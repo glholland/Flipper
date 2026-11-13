@@ -14,11 +14,13 @@ local requested = {}
 
 -- name, link, quality, icon, sellPrice, classID, stackCount; nil while uncached
 -- (a load is requested and GET_ITEM_INFO_RECEIVED fires when it arrives).
-function Compat.ItemInfo(item)
+-- `noRequest`: only return what's cached; don't ask the server (for big lists, where only
+-- the rows on screen should trigger loads).
+function Compat.ItemInfo(item, noRequest)
     local name, link, quality, _, _, _, _, stack, _, icon, sellPrice, classID =
         call(C_Item and C_Item.GetItemInfo, GetItemInfo, item)
     if not name then
-        if type(item) == "number" and not requested[item] and C_Item and C_Item.RequestLoadItemDataByID then
+        if not noRequest and type(item) == "number" and not requested[item] and C_Item and C_Item.RequestLoadItemDataByID then
             requested[item] = true
             C_Item.RequestLoadItemDataByID(item)
         end

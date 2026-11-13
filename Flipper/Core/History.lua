@@ -49,18 +49,31 @@ local RECENT_DAYS = 14   -- the summary lists items Auctionator has seen in this
 -- Every item with recent Auctionator prices (plus anything Flipper has seen sell):
 -- {itemID, name, latest, average, change, listed, daysTracked, lastSeen, perDay}.
 -- `search` (optional) keeps items whose name contains it, case-insensitive.
+-- Building the summary touches thousands of items, so it is cached until Invalidate()
+-- (new prices, a full scan) or the search changes. Item names that weren't cached are filled
+-- in later for the rows on screen only (Window's fill step).
+local cache = {}
+function History.Invalidate() cache = {} end
+
 function History.Summary(search)
     search = search and search ~= "" and search:lower() or nil
+    if cache.rows and cache.search == search then return cache.rows end
+    local rows = History.BuildSummary(search)
+    cache.rows, cache.search = rows, search
+    return rows
+end
+
+function History.BuildSummary(search)
     local rows, seen = {}, {}
     local today = ns.Day()
     local db = Auctionator and Auctionator.Database and Auctionator.Database.db
     local function add(itemID, entry)
         if seen[itemID] then return end
         seen[itemID] = true
-        local name, _, quality, icon = ns.Compat.ItemInfo(itemID)
+        local name, _, quality, icon = ns.Compat.ItemInfo(itemID, true)
         if search and not (name and name:lower():find(search, 1, true)) then return end
         local row = {itemID = itemID, name = name or ("item " .. itemID), quality = quality, icon = icon,
-            perDay = (ns.Market.Rate(itemID))}
+            needsInfo = not name, perDay = (ns.Market.Rate(itemID))}
         if entry then
             local days, lastDay = 0, nil
             for day in pairs(entry.h or {}) do

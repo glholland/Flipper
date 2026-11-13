@@ -261,6 +261,11 @@ end
 
 local function fill(row, data)
     row.data = data
+    -- Big lists skip item loads while building; only rows on screen ask for them.
+    if data.needsInfo then
+        local name, _, quality, icon = ns.Compat.ItemInfo(data.itemID)
+        if name then data.name, data.quality, data.icon, data.needsInfo = name, quality, icon, nil end
+    end
     local spec = Window.Spec()
     local icon = data.icon
     if spec == TABS.historyItem then icon = select(4, ns.Compat.ItemInfo(Window.historyItem)) end

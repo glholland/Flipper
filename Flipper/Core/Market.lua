@@ -109,6 +109,7 @@ local function finish(snapshot)
     end
     Market.state = "done"
     if ns.Vendors then ns.Vendors.Invalidate() end
+    if ns.History then ns.History.Invalidate() end
     changed()
 end
 

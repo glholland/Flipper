@@ -19,6 +19,8 @@ end
 local function onPricesUpdated()
     ns.Prices.ClearCache()
     ns.Vendors.Invalidate()
+    ns.History.Invalidate()
+    ns.RecipeShop.Invalidate()
     refresh()
     local best = ns.RecipeShop.Rows()[1]
     if best and best.status == "learnable" then
