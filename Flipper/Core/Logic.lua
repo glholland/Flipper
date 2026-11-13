@@ -28,11 +28,36 @@ local function averageQuantity(recipe)
     return (low + high) / 2
 end
 
+-- A price you can expect to sell at. The cheapest listing is often one optimistic seller
+-- (a single 50g listing for a 66s item), so when it is more than twice the multi-day
+-- average, trust the average. Cheaper-than-average listings are kept: that's the real market.
+function Logic.FairPrice(latest, mean)
+    latest, mean = num(latest), num(mean)
+    if latest and latest <= 0 then latest = nil end
+    if mean and mean <= 0 then mean = nil end
+    if not latest then return mean end
+    if mean and latest > 2 * mean then return mean end
+    return latest
+end
+
+-- Profit per unit from buying at a vendor and selling on the AH after the cut, or nil
+-- when it doesn't clear `minProfit` or a `minMargin` share of the vendor price.
+function Logic.VendorFlip(vendorEach, ahFair, cut, minProfit, minMargin)
+    vendorEach = num(vendorEach)
+    local net = Logic.NetAH(ahFair, cut)
+    if not vendorEach or vendorEach <= 0 or not net then return nil end
+    local profit = net - vendorEach
+    if profit < (minProfit or 1) or profit < vendorEach * (minMargin or 0) then return nil end
+    return math.floor(profit)
+end
+
 -- Value of one craft's output after the cut, cost of its reagents at AH prices.
 -- Reagents without a price are listed in `missing` and make profit nil.
-function Logic.CraftMargin(recipe, priceFn, cut)
+-- `sellFn` prices the output (defaults to priceFn); pass Prices.Fair to value what you sell
+-- at a realistic price while buying reagents at today's price.
+function Logic.CraftMargin(recipe, priceFn, cut, sellFn)
     local result = {missing = {}}
-    local outputPrice = Logic.NetAH(priceFn(recipe.output), cut)
+    local outputPrice = Logic.NetAH((sellFn or priceFn)(recipe.output), cut)
     result.value = outputPrice and math.floor(outputPrice * averageQuantity(recipe)) or nil
     local cost = 0
     for _, reagent in ipairs(recipe.reagents or {}) do
@@ -47,8 +72,8 @@ end
 
 -- What one unit of `reagentID` is worth when turned into this recipe's output:
 -- (craft value - cost of the other reagents) / how many of it the craft uses.
-function Logic.ReagentValue(recipe, reagentID, priceFn, cut)
-    local outputPrice = Logic.NetAH(priceFn(recipe.output), cut)
+function Logic.ReagentValue(recipe, reagentID, priceFn, cut, sellFn)
+    local outputPrice = Logic.NetAH((sellFn or priceFn)(recipe.output), cut)
     if not outputPrice then return nil end
     local used, others = 0, 0
     for _, reagent in ipairs(recipe.reagents or {}) do

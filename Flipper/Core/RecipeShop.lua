@@ -73,7 +73,7 @@ function Shop.Rows()
         if shown and not known[recipe.name:lower()] then
             local price = ns.Prices.AH(itemID)
             if price then
-                local margin = ns.Logic.CraftMargin(recipe, ns.Prices.AH, ns.AH_CUT)
+                local margin = ns.Logic.CraftMargin(recipe, ns.Prices.AH, ns.AH_CUT, ns.Prices.Fair)
                 -- The recipe item's own name ("Pattern: ...") is needed to buy it; rows wait
                 -- until its info loads (GET_ITEM_INFO_RECEIVED refreshes the window).
                 local name, _, quality, icon  -- local _: assigning the global one taints Blizzard code
@@ -85,7 +85,9 @@ function Shop.Rows()
                         or (yourSkill < recipe.skill and "skill")
                         or (not scanned[recipe.profession] and "unverified")
                         or "learnable"
+                    local vendorPrice = ns.Vendors.BuyPrice(itemID)
                     rows[#rows + 1] = {itemID = itemID, name = name, icon = icon, quality = quality,
+                        vendor = vendorPrice, sellers = vendorPrice and ns.Vendors.Sellers(itemID) or nil,
                         price = price, profit = margin.profit, payback = ns.Logic.Payback(price, margin.profit),
                         profession = recipe.profession, skill = recipe.skill, status = status}
                 end

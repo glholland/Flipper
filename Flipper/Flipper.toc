@@ -10,6 +10,7 @@
 
 Core\Init.lua
 Data\RecipeDB.lua
+Data\BuyPriceDB.lua
 Core\Money.lua
 Core\Logic.lua
 Core\Compat.lua
@@ -17,6 +18,7 @@ Core\Prices.lua
 Core\Recipes.lua
 Core\Bags.lua
 Core\Scanner.lua
+Core\Vendors.lua
 Core\RecipeShop.lua
 UI\Window.lua
 UI\Tooltip.lua

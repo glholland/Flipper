@@ -74,6 +74,25 @@ eq("db output", r.output, 2585)
 eq("db reagent count", #r.reagents, 3)
 eq("db reagent pair", r.reagents[2][1] .. "x" .. r.reagents[2][2], "2321x3")
 
+-- FairPrice
+eq("fair: one wishful listing -> average", Logic.FairPrice(500100, 6600), 6600)
+eq("fair: normal listing kept", Logic.FairPrice(7000, 6600), 7000)
+eq("fair: cheap listing kept", Logic.FairPrice(4000, 6600), 4000)
+eq("fair: no average", Logic.FairPrice(7000, nil), 7000)
+eq("fair: no listing", Logic.FairPrice(nil, 6600), 6600)
+eq("fair: nothing", Logic.FairPrice(nil, nil), nil)
+eq("fair: zero latest ignored", Logic.FairPrice(0, 6600), 6600)
+
+-- VendorFlip: buy 1s at vendor, AH fair 5s -> 475 - 100
+eq("vendor flip", Logic.VendorFlip(100, 500, 0.05, 10, 0.2), 375)
+eq("vendor flip below min profit", Logic.VendorFlip(100, 110, 0.05, 10, 0), nil)
+eq("vendor flip below margin", Logic.VendorFlip(10000, 11000, 0.05, 10, 0.2), nil)
+eq("vendor flip no AH price", Logic.VendorFlip(100, nil, 0.05, 10, 0.2), nil)
+
+-- CraftMargin with a separate sell price
+local fair = function(id) return id == 10 and 800 or price(id) end
+eq("craft sells at fair price", Logic.CraftMargin(bag, price, 0.05, fair).value, 1520)  -- 2 * 760
+
 -- SortRows
 local function names(rows) local t = {} for i, r in ipairs(rows) do t[i] = r.name end return table.concat(t, ",") end
 local function sample() return {{name = "b", v = 2}, {name = "a", v = nil}, {name = "c", v = 5}, {name = "d", v = 2}} end

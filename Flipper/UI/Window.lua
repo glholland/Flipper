@@ -7,8 +7,10 @@ local Money = ns.Money
 
 local ROW_HEIGHT, HEADER_Y, TOP_ROWS_Y = 22, -52, -66
 local VALUE_WIDTH, ICON_SPACE, PAD = 92, 34, 12
-local MIN_W, MIN_H, MAX_W, MAX_H = 480, 260, 1200, 1000
-local DEFAULT_W, DEFAULT_H = 600, 420
+local MIN_W, MIN_H, MAX_W, MAX_H = 600, 260, 1400, 1000
+local DEFAULT_W, DEFAULT_H = 760, 440
+local TAB_ORDER = {"flips", "vendor", "bags", "crafts", "recipes"}
+local TAB_LABEL = {flips = "AH flips", vendor = "Vendor", bags = "Bags", crafts = "Crafts", recipes = "Recipes"}
 
 local ACTION_TEXT = {ah = "|cff60a5faAuction|r", vendor = "Vendor", craft = "|cff4ade80Craft|r", none = "|cff9ca3af-|r"}
 local RECIPE_STATUS = {
@@ -64,9 +66,25 @@ local TABS = {
         end},
         {"Profit", function(r) return r.margin.profit end, function(r) return signed(r.margin.profit) end},
     },
+    vendor = {
+        default = {4, true},
+        {"Item", function(r) return r.name end, function(r)
+            return qualityName(r) .. (r.limited and " |cfffbbf24(limited)|r" or "")
+        end},
+        {"Vendor", function(r) return r.buy end, function(r)
+            return Money.Format(r.buy) .. (r.source == "data" and "|cff9ca3af*|r" or "")
+        end},
+        {"AH fair", function(r) return r.fair end, function(r) return Money.Format(r.fair) end},
+        {"Profit/ea", function(r) return r.profit end, function(r) return green(Money.Format(r.profit)) end},
+        {"Where to buy", function(r) return r.where end, function(r) return r.where end, 220},
+    },
     recipes = {
-        default = {3, true},
+        sortKey = "recipes:v2",
+        default = {4, true},
         {"Recipe for sale", function(r) return r.name end, function(r) return qualityName(r) end},
+        {"Vendor", function(r) return r.vendor end, function(r)
+            return r.vendor and Money.Format(r.vendor) or "|cff9ca3afDrop|r"
+        end},
         {"AH price", function(r) return r.price end, function(r) return Money.Format(r.price) end},
         {"Profit/craft", function(r) return r.profit end, function(r) return green(Money.Format(r.profit)) end},
         {"Pays back", function(r) return r.payback end, function(r)
@@ -75,14 +93,14 @@ local TABS = {
         {"Skill", function(r) return r.skill end, function(r) return string.format(RECIPE_STATUS[r.status], r.skill) end},
     },
 }
-local MAX_COLUMNS = 5
+local MAX_COLUMNS = 6
 
 local function craftRows()
     local rows = {}
     for _, recipe in ns.Recipes.All() do
         local name, _, quality, icon = ns.Compat.ItemInfo(recipe.output)
         rows[#rows + 1] = {name = recipe.name or name or "?", quality = quality, icon = icon,
-            itemID = recipe.output, margin = ns.Logic.CraftMargin(recipe, ns.Prices.AH, ns.AH_CUT)}
+            itemID = recipe.output, margin = ns.Logic.CraftMargin(recipe, ns.Prices.AH, ns.AH_CUT, ns.Prices.Fair)}
     end
     return rows
 end
@@ -90,11 +108,14 @@ end
 local function sortState()
     local saved = FlipperDB.window.sort or {}
     FlipperDB.window.sort = saved
-    local state = saved[Window.tab]
+    -- sortKey changes when a tab's columns change, so an old saved column index can't point
+    -- at the wrong column.
+    local key = TABS[Window.tab].sortKey or Window.tab
+    local state = saved[key]
     if not state then
         local default = TABS[Window.tab].default
         state = {column = default[1], descending = default[2]}
-        saved[Window.tab] = state
+        saved[key] = state
     end
     return state
 end
@@ -104,6 +125,9 @@ function Window.Data()
     if Window.tab == "flips" then
         rows = {}
         for i, row in ipairs(ns.Scanner.rows) do rows[i] = row end  -- don't reorder the scanner's own list
+    elseif Window.tab == "vendor" then
+        rows = {}
+        for i, row in ipairs(ns.Vendors.FlipRows()) do rows[i] = row end
     elseif Window.tab == "bags" then rows = ns.Bags.Rows()
     elseif Window.tab == "recipes" then rows = ns.RecipeShop.Rows()
     else rows = craftRows() end
@@ -120,14 +144,16 @@ local function layout()
     local width = frame:GetWidth()
     local columns = TABS[Window.tab]
     local count = #columns
-    local nameWidth = width - 2 * PAD - ICON_SPACE - (count - 1) * VALUE_WIDTH
+    local widths, fixed = {}, 0
+    for i = 2, count do widths[i] = columns[i][4] or VALUE_WIDTH; fixed = fixed + widths[i] end
+    widths[1] = math.max(120, width - 2 * PAD - ICON_SPACE - fixed)
     local x = {ICON_SPACE}
-    for i = 2, count do x[i] = ICON_SPACE + nameWidth + (i - 2) * VALUE_WIDTH end
+    for i = 2, count do x[i] = x[i - 1] + widths[i - 1] end
     for i, header in ipairs(frame.headers) do
         header:ClearAllPoints()
         if i <= count then
             header:SetPoint("TOPLEFT", PAD + x[i], HEADER_Y)
-            header:SetWidth(i == 1 and nameWidth or VALUE_WIDTH)
+            header:SetWidth(widths[i])
             header:Show()
         else header:Hide() end
     end
@@ -140,7 +166,7 @@ local function layout()
             cell:ClearAllPoints()
             if c <= count then
                 cell:SetPoint("LEFT", x[c], 0)
-                cell:SetWidth((c == 1 and nameWidth or VALUE_WIDTH) - 4)
+                cell:SetWidth(widths[c] - 4)
                 cell:Show()
             else cell:Hide() end
         end
@@ -194,6 +220,10 @@ function Window.Refresh()
         if Window.tab == "recipes" then
             status = #data .. " money-making recipes you don't know. Skill: |cff4ade80can learn|r "
                 .. "|cfff87171need skill|r |cfffbbf24open profession once|r |cff9ca3afnot yours|r"
+        elseif Window.tab == "vendor" then
+            local sources = LibQuestieDB and "your vendor visits + Questie" or "vendors you have opened (install Questie for more)"
+            status = #data .. " vendor items selling for 20%+ more on the AH. From " .. sources
+                .. ". |cff9ca3af*|r = list price, open the vendor for exact."
         elseif Window.tab == "crafts" then
             status = #data == 0 and "Open each profession window once to teach Flipper your recipes."
                 or (#data .. " recipes, AH prices from " .. (ns.Prices.Source() or "nothing"))
@@ -239,14 +269,33 @@ function Window.CreateRow(parent, index)
         if not self.data or not self.data.itemID then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetItemByID(self.data.itemID)
-        if Window.tab == "flips" or Window.tab == "recipes" then
+        local sellers = self.data.sellers
+        if sellers and #sellers > 0 then
+            GameTooltip:AddLine("Sold by:", 1, 0.82, 0)
+            for _, seller in ipairs(sellers) do
+                GameTooltip:AddLine("  " .. ns.Vendors.Describe(seller), 1, 1, 1)
+            end
+        end
+        if Window.tab == "vendor" then
+            GameTooltip:AddLine("Click: map pin to the vendor. Shift-click: check the AH in Auctionator.", 0.3, 0.9, 0.5, true)
+        elseif Window.tab == "recipes" and sellers then
+            GameTooltip:AddLine("Click: open in Auctionator. Shift-click: map pin to the vendor.", 0.3, 0.9, 0.5, true)
+        elseif Window.tab == "flips" or Window.tab == "recipes" then
             GameTooltip:AddLine("Click: open in Auctionator to buy", 0.3, 0.9, 0.5)
         end
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
     row:SetScript("OnClick", function(self)
-        if (Window.tab == "flips" or Window.tab == "recipes") and self.data then ns.Scanner.OpenInAuctionator(self.data) end
+        local data = self.data
+        if not data then return end
+        local pin = (Window.tab == "vendor") ~= IsShiftKeyDown()
+        if Window.tab == "vendor" or Window.tab == "recipes" then
+            if pin and data.sellers and data.sellers[1] then ns.Vendors.Waypoint(data.sellers[1]); return end
+        end
+        if Window.tab == "flips" or Window.tab == "recipes" or Window.tab == "vendor" then
+            ns.Scanner.OpenInAuctionator(data)
+        end
     end)
     return row
 end
@@ -281,11 +330,11 @@ function Window.Create()
     frame.title:SetText("Flipper")
 
     frame.tabs = {}
-    for i, key in ipairs({"flips", "bags", "crafts", "recipes"}) do
+    for i, key in ipairs(TAB_ORDER) do
         local tab = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        tab:SetSize(80, 22)
-        tab:SetPoint("TOPLEFT", PAD + (i - 1) * 84, -28)
-        tab:SetText(key:sub(1, 1):upper() .. key:sub(2))
+        tab:SetSize(78, 22)
+        tab:SetPoint("TOPLEFT", PAD + (i - 1) * 82, -28)
+        tab:SetText(TAB_LABEL[key])
         tab:SetScript("OnClick", function() Window.tab, Window.offset = key, 0; Window.Refresh() end)
         frame.tabs[key] = tab
     end

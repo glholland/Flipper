@@ -103,7 +103,7 @@ end
 function Recipes.CraftOptions(itemID)
     local options = {}
     for _, recipe in ipairs(Recipes.UsingReagent(itemID)) do
-        local perUnit = ns.Logic.ReagentValue(recipe, itemID, ns.Prices.AH, ns.AH_CUT)
+        local perUnit = ns.Logic.ReagentValue(recipe, itemID, ns.Prices.AH, ns.AH_CUT, ns.Prices.Fair)
         if perUnit then options[#options + 1] = {name = recipe.name, perUnit = perUnit} end
     end
     return options

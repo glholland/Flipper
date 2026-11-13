@@ -17,6 +17,7 @@ end
 -- After every Auctionator scan: refresh the window and point out the best opportunities.
 local function onPricesUpdated()
     ns.Prices.ClearCache()
+    ns.Vendors.Invalidate()
     refresh()
     local best = ns.RecipeShop.Rows()[1]
     if best and best.status == "learnable" then
@@ -44,7 +45,11 @@ local function captureRecipes()
 end
 events.TRADE_SKILL_SHOW = captureRecipes
 events.TRADE_SKILL_LIST_UPDATE = captureRecipes
-events.BAG_UPDATE_DELAYED = function() if ns.Window.tab == "bags" then refresh() end end
+-- Remember what every vendor you open sells, and where they stand.
+local function recordMerchant() pcall(ns.Vendors.RecordMerchant) end
+events.MERCHANT_SHOW = recordMerchant
+events.MERCHANT_UPDATE = recordMerchant
+events.BAG_UPDATE_DELAYED =function() if ns.Window.tab == "bags" then refresh() end end
 
 local pendingInfoRefresh
 function events.GET_ITEM_INFO_RECEIVED()
@@ -71,6 +76,7 @@ end)
 local commands = {
     [""] = function() ns.Window.Toggle() end,
     flips = function() ns.Window.Toggle("flips") end,
+    vendor = function() ns.Window.Toggle("vendor") end,
     bags = function() ns.Window.Toggle("bags") end,
     crafts = function() ns.Window.Toggle("crafts") end,
     recipes = function() ns.Window.Toggle("recipes") end,
@@ -83,7 +89,7 @@ local commands = {
     end,
 }
 local function help()
-    ns.Print("/flip - window | /flip scan | /flip bags | /flip crafts | /flip recipes [all] | /flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
+    ns.Print("/flip - window | /flip scan | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
 end
 SLASH_FLIPPER1 = "/flip"
 SLASH_FLIPPER2 = "/flipper"

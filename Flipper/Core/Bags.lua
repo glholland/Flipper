@@ -8,7 +8,7 @@ if Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag then BAGS[#BAGS + 1] = En
 
 function Bags.Advice(itemID)
     return ns.Logic.BestUse{
-        ah = ns.Prices.AH(itemID),
+        ah = ns.Prices.Fair(itemID),
         vendor = ns.Prices.Vendor(itemID),
         crafts = ns.Recipes.CraftOptions(itemID),
         cut = ns.AH_CUT,

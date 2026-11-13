@@ -47,6 +47,34 @@ function Prices.AH(itemID)
     return value
 end
 
+-- Auctionator's multi-day mean (its "average" setting, default 21 days), or nil.
+local meanCache = {}
+function Prices.Mean(itemID)
+    if not ns.IsNumber(itemID) then return nil end
+    local now = GetTime()
+    local hit = meanCache[itemID]
+    if hit and hit.expires > now then return hit.value end
+    local value
+    local db = Auctionator and Auctionator.Database
+    if db and type(db.GetMeanPrice) == "function" then
+        local days = 21
+        local config = Auctionator.Config
+        if config and config.Get and config.Options and config.Options.AUCTION_MEAN_DAYS_LIMIT then
+            local ok, d = pcall(config.Get, config.Options.AUCTION_MEAN_DAYS_LIMIT)
+            if ok and ns.IsNumber(d) and d >= 1 then days = math.floor(d) end
+        end
+        local ok, mean = pcall(db.GetMeanPrice, db, tostring(itemID), days)
+        if ok and ns.IsNumber(mean) and mean > 0 then value = mean end
+    end
+    meanCache[itemID] = {value = value, expires = now + CACHE_SECONDS}
+    return value
+end
+
+-- What you can realistically sell one unit for (see Logic.FairPrice).
+function Prices.Fair(itemID)
+    return ns.Logic.FairPrice(Prices.AH(itemID), Prices.Mean(itemID))
+end
+
 -- What a vendor pays for one unit: 0 if they won't buy it, nil while uncached.
 function Prices.Vendor(itemID)
     local name, _, _, _, sellPrice = ns.Compat.ItemInfo(itemID)
@@ -61,4 +89,4 @@ function Prices.Source()
     end
 end
 
-function Prices.ClearCache() cache = {} end
+function Prices.ClearCache() cache, meanCache = {}, {} end

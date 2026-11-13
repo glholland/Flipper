@@ -5,7 +5,11 @@ A World of Warcraft: Forever addon that points at easy money:
 - **Flips:** auction house listings cheaper than what a vendor pays for them. Buy, then sell to any vendor.
 - **Bags:** the best use of every item you carry: vendor it, auction it, or craft it into something worth more (e.g. sell fish raw vs. cook them).
 - **Crafts:** profit per craft for every recipe your character knows, at current AH prices.
+- **Vendor:** things vendors sell that go for 20%+ more on the AH, with where to buy them. Click a row for a map pin to the vendor. Every merchant you open is remembered (exact prices, limited stock, location); with Questie installed, its database adds vendors you haven't visited.
+- **Recipes:** unlearned recipes on the AH that would make money, with the vendor price or "Drop".
 - **Tooltips:** AH value after the 5% cut, vendor price and the best use, on every item.
+
+Sale values use a *fair price*: the cheapest listing, unless it's more than twice Auctionator's 21-day average (one wishful seller), in which case the average.
 
 Prices come from Auctionator (or TSM if installed). Flipper never buys anything itself: clicking a flip opens Auctionator's shopping search, and you buy with its buttons.
 
