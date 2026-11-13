@@ -5,7 +5,7 @@ local Window = {tab = "flips", offset = 0}
 ns.Window = Window
 local Money = ns.Money
 
-local ROW_HEIGHT, HEADER_Y, TOP_ROWS_Y = 22, -52, -66
+local ROW_HEIGHT, HEADER_Y, TOP_ROWS_Y = 22, -56, -74
 local VALUE_WIDTH, ICON_SPACE, PAD = 92, 34, 12
 local MIN_W, MIN_H, MAX_W, MAX_H = 680, 260, 1400, 1000
 local DEFAULT_W, DEFAULT_H = 760, 440
@@ -102,15 +102,26 @@ local TABS = {
 local function count(v) return v and tostring(v) or "|cff9ca3af-|r" end
 
 -- History: a summary of every watched item, or day by day for Window.historyItem.
+local function percent(change)
+    if not change then return count(nil) end
+    local p = math.floor(change * 100 + 0.5)
+    if p > 0 then return "|cfff87171+" .. p .. "%|r" end   -- pricier than usual: red for buyers
+    if p < 0 then return "|cff4ade80" .. p .. "%|r" end     -- cheaper than usual: green
+    return "0%"
+end
+
 TABS.history = {
-    default = {2, true},
-    {"Item (click for its history)", function(r) return r.name end, function(r) return qualityName(r) end},
-    {"Sold", function(r) return r.sold end, function(r) return green(r.sold) end, 64},
-    {"Expired", function(r) return r.expired end, function(r) return tostring(r.expired) end, 64},
-    {"Relisted", function(r) return r.cancelled end, function(r) return tostring(r.cancelled) end, 64},
-    {"Sell-through", function(r) return r.through end, function(r)
-        return string.format("%d%%", math.floor(r.through * 100 + 0.5))
-    end, 80},
+    sortKey = "history:v2",
+    default = {6, false},
+    {"Item", function(r) return r.name end, function(r) return qualityName(r) end},
+    {"Now", function(r) return r.latest end, function(r) return r.latest and Money.Format(r.latest) or count(nil) end, 100},
+    {"21-day avg", function(r) return r.average end, function(r) return r.average and Money.Format(r.average) or count(nil) end, 100},
+    {"vs avg", function(r) return r.change end, function(r) return percent(r.change) end, 64},
+    {"Listed", function(r) return r.listed end, function(r) return count(r.listed) end, 60},
+    {"Last seen", function(r) return r.lastSeen end, function(r)
+        if not r.lastSeen then return count(nil) end
+        return r.lastSeen == 0 and "today" or (r.lastSeen .. "d ago")
+    end, 76},
     {"Sold/day", function(r) return r.perDay end, function(r) return ns.Market.FormatRate(r.perDay) end, 70},
 }
 TABS.historyItem = {
@@ -138,6 +149,17 @@ function Window.ShowHistory(itemID)
 end
 
 local MAX_COLUMNS = 7
+-- Text columns read left to right; everything else is a number and right-aligns.
+local LEFT_ALIGNED = {["Best use"] = true, ["Where to buy"] = true}
+-- Shown in the middle of an empty list.
+local EMPTY = {
+    flips = "No AH flips yet.\nWith the auction house open, press Scan to find listings\ncheaper than what a vendor pays for them.",
+    vendor = "No vendor flips found.\nOpen vendors as you travel (Flipper remembers their stock),\nor install Questie to know every vendor.",
+    bags = "Your bags are empty, or item info is still loading.",
+    crafts = "No recipes known yet.\nOpen each profession window once so Flipper can learn your recipes.",
+    recipes = "No money-making recipes right now.\nScan the AH with Auctionator for fresh prices, or try another profession filter.",
+    history = "No items found.\nAuctionator has no prices from the last 14 days (scan the AH with it),\nor nothing matches your search.",
+}
 local MARKET_STATUS = {
     replicating = "Full scan: waiting for the AH...", reading = "Full scan: reading listings...",
     timeout = "Full scan: the AH didn't answer. Try again later.", unsupported = "Full scans aren't available on this client.",
@@ -179,7 +201,7 @@ function Window.Data()
     elseif Window.tab == "bags" then rows = ns.Bags.Rows()
     elseif Window.tab == "recipes" then rows = ns.RecipeShop.Rows()
     elseif Window.tab == "history" then
-        rows = Window.historyItem and ns.History.ItemDays(Window.historyItem) or ns.History.Summary()
+        rows = Window.historyItem and ns.History.ItemDays(Window.historyItem) or ns.History.Summary(Window.historySearch)
     else rows = craftRows() end
     local state = sortState()
     local column = Window.Spec()[state.column]
@@ -196,14 +218,22 @@ local function layout()
     local count = #columns
     local widths, fixed = {}, 0
     for i = 2, count do widths[i] = columns[i][4] or VALUE_WIDTH; fixed = fixed + widths[i] end
-    widths[1] = math.max(120, width - 2 * PAD - ICON_SPACE - fixed)
+    -- The name column grows up to about half the width; any space beyond that is shared by the
+    -- value columns, so numbers don't end up stranded at the far right of a wide window.
+    local available = width - 2 * PAD - ICON_SPACE - fixed
+    widths[1] = math.max(140, math.min(available, math.floor((width - 2 * PAD) * 0.48)))
+    local spare = math.max(0, available - widths[1])
+    for i = 2, count do widths[i] = widths[i] + math.floor(spare / (count - 1)) end
     local x = {ICON_SPACE}
     for i = 2, count do x[i] = x[i - 1] + widths[i - 1] end
+    local align = {}
+    for i = 1, count do align[i] = (i == 1 or LEFT_ALIGNED[columns[i][1]]) and "LEFT" or "RIGHT" end
     for i, header in ipairs(frame.headers) do
         header:ClearAllPoints()
         if i <= count then
             header:SetPoint("TOPLEFT", PAD + x[i], HEADER_Y)
-            header:SetWidth(widths[i])
+            header:SetWidth(widths[i] - 10)
+            header.text:SetJustifyH(align[i])
             header:Show()
         else header:Hide() end
     end
@@ -217,10 +247,12 @@ local function layout()
             cell:ClearAllPoints()
             if c <= count then
                 cell:SetPoint("LEFT", x[c], 0)
-                cell:SetWidth(widths[c] - 4)
+                cell:SetWidth(widths[c] - 10)
+                cell:SetJustifyH(align[c])
                 cell:Show()
             else cell:Hide() end
         end
+        row.stripe:SetShown(i % 2 == 0)
         row.inView = i <= visible
         if not row.inView then row:Hide() end
     end
@@ -263,6 +295,9 @@ function Window.Refresh()
         end
     end
     frame.back:SetShown(spec == TABS.historyItem)
+    frame.search:SetShown(spec == TABS.history)
+    local emptyText = spec == TABS.historyItem and "No price or sales data for this item yet." or EMPTY[Window.tab]
+    frame.empty:SetText(#data == 0 and emptyText or "")
     local state = sortState()
     for i, header in ipairs(frame.headers) do
         local column = Window.Spec()[i]
@@ -275,7 +310,7 @@ function Window.Refresh()
         local entry = row.inView and data[i + Window.offset]
         if entry then fill(row, entry) else row:Hide() end
     end
-    for key, button in pairs(frame.tabs) do button:SetEnabled(key ~= Window.tab) end
+    for key, button in pairs(frame.tabs) do button:SetSelected(key == Window.tab) end
     local status
     if Window.tab == "flips" then
         local s = ns.Scanner
@@ -312,10 +347,10 @@ function Window.Refresh()
                 if through then status = status .. string.format(", %d%% sell", math.floor(through * 100 + 0.5)) end
             end
         elseif Window.tab == "history" then
-            status = #data == 0
-                and "No sales history yet: press Full scan on the AH flips tab on each AH visit. Right-click any row to see one item."
-                or string.format("%d items, %.0f hours of AH watched (last %d days). Right-click any row in any tab for its history.",
-                    #data, ns.History.HoursWatched(), ns.Market.WINDOW_DAYS)
+            local hours = ns.History.HoursWatched()
+            status = string.format("%d items priced by Auctionator in the last 14 days. Click one for its daily history.", #data)
+                .. (hours > 0 and string.format(" Sold/day: %.0fh of full scans.", hours)
+                    or " Sold/day starts after two Full scans.")
         elseif Window.tab == "crafts" then
             status = #data == 0 and "Open each profession window once to teach Flipper your recipes."
                 or (#data .. " recipes, AH prices from " .. (ns.Prices.Source() or "nothing"))
@@ -386,6 +421,9 @@ function Window.CreateRow(parent, index)
     row.bar:SetColorTexture(0.29, 0.87, 0.5, 0.25)
     row.bar:Hide()
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row.stripe = row:CreateTexture(nil, "BACKGROUND", nil, -1)
+    row.stripe:SetAllPoints()
+    row.stripe:SetColorTexture(1, 1, 1, 0.035)
     row.cells = {}
     for c = 1, MAX_COLUMNS do
         local cell = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -439,9 +477,12 @@ end
 
 local function saveGeometry(frame)
     local saved = FlipperDB.window
+    -- Docked and floating windows keep separate sizes; a docked position is relative to the AH.
+    if Window.docked then
+        saved.dockWidth, saved.dockHeight = math.floor(frame:GetWidth()), math.floor(frame:GetHeight())
+        return
+    end
     saved.width, saved.height = math.floor(frame:GetWidth()), math.floor(frame:GetHeight())
-    -- While docked the position is relative to the AH frame; only the size is worth keeping.
-    if Window.docked then return end
     local point, _, relativePoint, x, y = frame:GetPoint(1)
     saved.point, saved.relativePoint, saved.x, saved.y = point, relativePoint, x, y
 end
@@ -481,6 +522,13 @@ end
 function Window.Dock()
     local frame, ah = Window.Create(), AuctionHouseFrame
     if not ah or FlipperDB.dock == false then return end
+    -- Fit the space right of the AH: a window wider than that gets pushed back over the AH
+    -- by the keep-on-screen rule. Compare in this frame's own scale.
+    local scale = frame:GetEffectiveScale()
+    local space = (UIParent:GetRight() * UIParent:GetEffectiveScale() - ah:GetRight() * ah:GetEffectiveScale()) / scale
+    local saved = FlipperDB.window
+    local width = math.max(420, math.min(saved.dockWidth or 720, space - 8))
+    frame:SetSize(width, saved.dockHeight or ah:GetHeight() * ah:GetEffectiveScale() / scale)
     frame:ClearAllPoints()
     frame:SetPoint("TOPLEFT", ah, "TOPRIGHT", 4, 0)
     Window.docked = true
@@ -490,6 +538,8 @@ function Window.OnAuctionHouseClosed()
     if not Window.docked or not Window.frame then return end
     Window.docked = false
     if Window.autoShown then Window.frame:Hide() end
+    local saved = FlipperDB.window
+    Window.frame:SetSize(saved.width or DEFAULT_W, saved.height or DEFAULT_H)
     restorePosition(Window.frame)
 end
 
@@ -515,19 +565,53 @@ function Window.Create()
     frame.title:SetPoint("TOP", 0, -5)
     frame.title:SetText("Flipper")
 
+    -- Flat text tabs: grey, white on hover, gold with an underline when selected.
     frame.tabs = {}
-    for i, key in ipairs(TAB_ORDER) do
-        local tab = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        tab:SetSize(72, 22)
-        tab:SetPoint("TOPLEFT", PAD + (i - 1) * 75, -28)
-        tab:SetText(TAB_LABEL[key])
+    local previous
+    for _, key in ipairs(TAB_ORDER) do
+        local tab = CreateFrame("Button", nil, frame)
+        tab:SetHeight(22)
+        tab.label = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        tab.label:SetPoint("CENTER", 0, 1)
+        tab.label:SetText(TAB_LABEL[key])
+        tab:SetWidth(tab.label:GetStringWidth() + 20)
+        if previous then tab:SetPoint("LEFT", previous, "RIGHT", 2, 0) else tab:SetPoint("TOPLEFT", PAD, -27) end
+        tab.underline = tab:CreateTexture(nil, "ARTWORK")
+        tab.underline:SetPoint("BOTTOMLEFT", 6, 0)
+        tab.underline:SetPoint("BOTTOMRIGHT", -6, 0)
+        tab.underline:SetHeight(2)
+        tab.underline:SetColorTexture(1, 0.82, 0, 1)
+        local hover = tab:CreateTexture(nil, "HIGHLIGHT")
+        hover:SetAllPoints()
+        hover:SetColorTexture(1, 1, 1, 0.06)
+        tab.SetSelected = function(self, selected)
+            self.underline:SetShown(selected)
+            if selected then self.label:SetTextColor(1, 0.82, 0) else self.label:SetTextColor(0.7, 0.7, 0.7) end
+        end
+        tab:SetScript("OnEnter", function(self) if not self.underline:IsShown() then self.label:SetTextColor(1, 1, 1) end end)
+        tab:SetScript("OnLeave", function(self) self:SetSelected(self.underline:IsShown()) end)
         tab:SetScript("OnClick", function()
             Window.tab, Window.offset = key, 0
             if key == "history" then Window.historyItem = nil end
             Window.Refresh()
         end)
         frame.tabs[key] = tab
+        previous = tab
     end
+    -- Line under the tab strip, and a darker inset behind the list.
+    local rule = frame:CreateTexture(nil, "ARTWORK")
+    rule:SetPoint("TOPLEFT", PAD, -50)
+    rule:SetPoint("TOPRIGHT", -PAD, -50)
+    rule:SetHeight(1)
+    rule:SetColorTexture(1, 0.82, 0, 0.25)
+    local inset = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
+    inset:SetPoint("TOPLEFT", PAD, TOP_ROWS_Y + 2)
+    inset:SetPoint("BOTTOMRIGHT", -PAD, 46)
+    inset:SetColorTexture(0, 0, 0, 0.35)
+    frame.empty = frame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    frame.empty:SetPoint("CENTER", inset, "CENTER")
+    frame.empty:SetWidth(420)
+    frame.empty:SetSpacing(4)
     frame.scan = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.scan:SetSize(90, 22)
     frame.scan:SetPoint("TOPRIGHT", -PAD, -28)
@@ -578,12 +662,45 @@ function Window.Create()
     frame.back:SetScript("OnClick", function() Window.historyItem, Window.offset = nil, 0; Window.Refresh() end)
     frame.back:Hide()
 
+    -- History summary: filter by item name.
+    -- Plain edit box (no template, so nothing depends on which Blizzard templates exist).
+    frame.search = CreateFrame("EditBox", nil, frame)
+    frame.search:SetSize(180, 20)
+    frame.search:SetPoint("TOPRIGHT", -PAD - 2, -28)
+    frame.search:SetAutoFocus(false)
+    frame.search:SetFontObject("ChatFontNormal")
+    frame.search:SetTextInsets(6, 6, 0, 0)
+    local searchBg = frame.search:CreateTexture(nil, "BACKGROUND")
+    searchBg:SetAllPoints()
+    searchBg:SetColorTexture(0, 0, 0, 0.6)
+    local searchBorder = frame.search:CreateTexture(nil, "BORDER")
+    searchBorder:SetPoint("BOTTOMLEFT")
+    searchBorder:SetPoint("BOTTOMRIGHT")
+    searchBorder:SetHeight(1)
+    searchBorder:SetColorTexture(1, 0.82, 0, 0.5)
+    frame.search.hint = frame.search:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    frame.search.hint:SetPoint("LEFT", 6, 0)
+    frame.search.hint:SetText("Search items")
+    frame.search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    frame.search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    frame.search:SetScript("OnEditFocusGained", function(self) self.hint:Hide() end)
+    frame.search:SetScript("OnEditFocusLost", function(self) self.hint:SetShown(self:GetText() == "") end)
+    frame.search:SetScript("OnTextChanged", function(self)
+        local text = self:GetText()
+        if text == Window.historySearch then return end
+        Window.historySearch, Window.offset = text, 0
+        if Window.searchPending then return end
+        Window.searchPending = true
+        C_Timer.After(0.25, function() Window.searchPending = false; Window.Refresh() end)
+    end)
+    frame.search:Hide()
+
     frame.headers = {}
     for i = 1, MAX_COLUMNS do
         local header = CreateFrame("Button", nil, frame)
         header:SetHeight(16)
         header.text = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        header.text:SetPoint("LEFT")
+        header.text:SetAllPoints()
         header.text:SetJustifyH("LEFT")
         header:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
         header:SetScript("OnClick", function() clickHeader(i) end)

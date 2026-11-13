@@ -44,25 +44,51 @@ function History.ItemDays(itemID)
     return rows
 end
 
--- One row per item Flipper has seen leave the AH: totals over the stats window.
-function History.Summary()
-    local s = stats()
-    local rows = {}
-    if not s or not s.items then return rows end
-    local today, window = ns.Day(), ns.Market.WINDOW_DAYS
-    for itemID, days in pairs(s.items) do
-        local sold, expired, cancelled = 0, 0, 0
-        for day, d in pairs(days) do
-            if day > today - window then sold, expired, cancelled = sold + d[1], expired + d[2], cancelled + d[3] end
+local RECENT_DAYS = 14   -- the summary lists items Auctionator has seen in this many days
+
+-- Every item with recent Auctionator prices (plus anything Flipper has seen sell):
+-- {itemID, name, latest, average, change, listed, daysTracked, lastSeen, perDay}.
+-- `search` (optional) keeps items whose name contains it, case-insensitive.
+function History.Summary(search)
+    search = search and search ~= "" and search:lower() or nil
+    local rows, seen = {}, {}
+    local today = ns.Day()
+    local db = Auctionator and Auctionator.Database and Auctionator.Database.db
+    local function add(itemID, entry)
+        if seen[itemID] then return end
+        seen[itemID] = true
+        local name, _, quality, icon = ns.Compat.ItemInfo(itemID)
+        if search and not (name and name:lower():find(search, 1, true)) then return end
+        local row = {itemID = itemID, name = name or ("item " .. itemID), quality = quality, icon = icon,
+            perDay = (ns.Market.Rate(itemID))}
+        if entry then
+            local days, lastDay = 0, nil
+            for day in pairs(entry.h or {}) do
+                day = tonumber(day)
+                if day then days = days + 1; if not lastDay or day > lastDay then lastDay = day end end
+            end
+            row.latest = tonumber(entry.m)
+            row.average = ns.Prices.Mean(itemID)
+            row.daysTracked, row.lastSeen = days, lastDay and (today - lastDay) or nil
+            row.listed = lastDay and entry.a and tonumber(entry.a[lastDay] or entry.a[tostring(lastDay)]) or nil
+            if row.latest and row.average and row.average > 0 then row.change = row.latest / row.average - 1 end
         end
-        if sold + expired + cancelled > 0 then
-            local name, _, quality, icon = ns.Compat.ItemInfo(itemID)
-            local ended = sold + expired + cancelled
-            rows[#rows + 1] = {itemID = itemID, name = name or ("item " .. itemID), quality = quality, icon = icon,
-                sold = sold, expired = expired, cancelled = cancelled, through = sold / ended,
-                perDay = (ns.Market.Rate(itemID))}
+        rows[#rows + 1] = row
+    end
+    if type(db) == "table" then
+        for key, entry in pairs(db) do
+            local itemID = type(key) == "string" and tonumber(key:match("^(%d+)$"))
+            if itemID and type(entry) == "table" then
+                local recent = false
+                for day in pairs(entry.h or {}) do
+                    if tonumber(day) and tonumber(day) > today - RECENT_DAYS then recent = true; break end
+                end
+                if recent then add(itemID, entry) end
+            end
         end
     end
+    local s = stats()
+    for itemID in pairs(s and s.items or {}) do add(itemID, db and db[tostring(itemID)]) end
     return rows
 end
 
