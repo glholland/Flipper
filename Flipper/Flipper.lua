@@ -74,6 +74,7 @@ local commands = {
     crafts = function() ns.Window.Toggle("crafts") end,
     recipes = function() ns.Window.Toggle("recipes") end,
     verify = function() ns.RecipeShop.Verify() end,
+    reset = function() ns.Window.ResetGeometry(); ns.Print("window size and position reset") end,
     scan = function() ns.Window.Toggle("flips"); ns.Scanner.Start() end,
     tooltip = function()
         FlipperDB.tooltip = not FlipperDB.tooltip
@@ -81,7 +82,7 @@ local commands = {
     end,
 }
 local function help()
-    ns.Print("/flip - window | /flip scan | /flip bags | /flip crafts | /flip recipes [all] | /flip verify | /flip tooltip | /flip minprofit <copper>")
+    ns.Print("/flip - window | /flip scan | /flip bags | /flip crafts | /flip recipes [all] | /flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
 end
 SLASH_FLIPPER1 = "/flip"
 SLASH_FLIPPER2 = "/flipper"

@@ -81,6 +81,25 @@ function Logic.RecipeFromDB(entry)
         qtyMin = entry[5], qtyMax = entry[6], reagents = reagents}
 end
 
+-- Sorts rows in place by getter(row). Rows whose value is nil always go last, whichever
+-- direction; equal values fall back to row.name so the order is stable between refreshes.
+function Logic.SortRows(rows, getter, descending)
+    table.sort(rows, function(a, b)
+        local va, vb = getter(a), getter(b)
+        if va == nil or vb == nil then
+            if (va == nil) ~= (vb == nil) then return vb == nil end
+        elseif va ~= vb then
+            if type(va) == "string" then va, vb = va:lower(), vb:lower() end
+            if va ~= vb then
+                if descending then return va > vb end
+                return va < vb
+            end
+        end
+        return (a.name or "") < (b.name or "")
+    end)
+    return rows
+end
+
 -- Picks the best thing to do with one unit of an item.
 -- opts = {ah=market price|nil, vendor=sell price|nil, crafts={{name, perUnit}}, cut}
 -- Ties go to the vendor: instant and no listing risk.

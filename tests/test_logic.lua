@@ -74,6 +74,14 @@ eq("db output", r.output, 2585)
 eq("db reagent count", #r.reagents, 3)
 eq("db reagent pair", r.reagents[2][1] .. "x" .. r.reagents[2][2], "2321x3")
 
+-- SortRows
+local function names(rows) local t = {} for i, r in ipairs(rows) do t[i] = r.name end return table.concat(t, ",") end
+local function sample() return {{name = "b", v = 2}, {name = "a", v = nil}, {name = "c", v = 5}, {name = "d", v = 2}} end
+local getV = function(r) return r.v end
+eq("sort ascending, nil last", names(Logic.SortRows(sample(), getV, false)), "b,d,c,a")
+eq("sort descending, nil last", names(Logic.SortRows(sample(), getV, true)), "c,b,d,a")
+eq("sort strings case-insensitive", names(Logic.SortRows({{name = "Zed"}, {name = "apple"}}, function(r) return r.name end, false)), "apple,Zed")
+
 -- Money
 local function plain(s) return (s:gsub("|T.-|t", "")) end
 eq("money full", plain(Money.Format(12345)), "1g 23s 45c")
