@@ -186,11 +186,14 @@ function Window.Refresh()
         end
         frame.scan:SetEnabled(ns.Compat.AuctionHouseOpen() and not s.running)
         frame.scan:Show()
+        frame.filter:Hide()
     else
         frame.scan:Hide()
+        frame.filter:SetShown(Window.tab == "recipes")
+        frame.filter:SetText(ns.RecipeShop.FilterLabel())
         if Window.tab == "recipes" then
-            status = #data .. " money-making recipes you don't know" .. (ns.RecipeShop.showAll and " (all professions)" or "")
-                .. ". Skill: |cff4ade80can learn|r |cfff87171need skill|r |cfffbbf24open profession once|r"
+            status = #data .. " money-making recipes you don't know. Skill: |cff4ade80can learn|r "
+                .. "|cfff87171need skill|r |cfffbbf24open profession once|r |cff9ca3afnot yours|r"
         elseif Window.tab == "crafts" then
             status = #data == 0 and "Open each profession window once to teach Flipper your recipes."
                 or (#data .. " recipes, AH prices from " .. (ns.Prices.Source() or "nothing"))
@@ -291,6 +294,24 @@ function Window.Create()
     frame.scan:SetPoint("TOPRIGHT", -PAD, -28)
     frame.scan:SetText("Scan")
     frame.scan:SetScript("OnClick", function() ns.Scanner.Start() end)
+
+    -- Recipes tab: which professions to show. Click cycles through the choices.
+    frame.filter = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.filter:SetSize(130, 22)
+    frame.filter:SetPoint("TOPRIGHT", -PAD, -28)
+    frame.filter:SetScript("OnClick", function()
+        ns.RecipeShop.NextFilter()
+        Window.offset = 0
+        Window.Refresh()
+    end)
+    frame.filter:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:AddLine("Professions shown")
+        GameTooltip:AddLine("Click to cycle: yours, each of yours, every profession.", 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    frame.filter:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    frame.filter:Hide()
 
     frame.headers = {}
     for i = 1, MAX_COLUMNS do

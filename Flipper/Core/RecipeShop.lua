@@ -2,8 +2,36 @@
 -- Unlearned recipes can't be read from the client, so the recipe data ships in Data/RecipeDB.lua
 -- (generated from Blizzard's Forever game data). Prices come from Auctionator/TSM.
 local _, ns = ...
-local Shop = {showAll = false}
+local Shop = {}
 ns.RecipeShop = Shop
+
+local EVERYTHING = "*"
+local CRAFTING = {"Alchemy", "Blacksmithing", "Cooking", "Enchanting", "Engineering", "First Aid",
+    "Leatherworking", "Tailoring"}
+
+-- Which recipes the tab shows: nil = your professions, "*" = every profession, or one profession.
+function Shop.Filter() return FlipperDB and FlipperDB.recipeFilter end
+
+function Shop.FilterLabel()
+    local filter = Shop.Filter()
+    if filter == nil then return "All mine" end
+    if filter == EVERYTHING then return "Every profession" end
+    return filter
+end
+
+-- Cycles: your professions -> each of your crafting professions -> every profession -> ...
+function Shop.NextFilter()
+    local choices = {false}
+    local yours = Shop.Professions()
+    for _, name in ipairs(CRAFTING) do if yours[name] then choices[#choices + 1] = name end end
+    choices[#choices + 1] = EVERYTHING
+    local current = Shop.Filter() or false
+    local nextIndex = 1
+    for i, choice in ipairs(choices) do if choice == current then nextIndex = i % #choices + 1 end end
+    FlipperDB.recipeFilter = choices[nextIndex] or nil
+end
+
+function Shop.SetEverything() FlipperDB.recipeFilter = EVERYTHING end
 
 -- Your professions and skill: GetProfessions works without any window open;
 -- Recipes.Capture also records skill when a profession window opens.
@@ -13,7 +41,7 @@ function Shop.Professions()
         for _, index in ipairs({GetProfessions()}) do
             if index then
                 local name, _, skill = GetProfessionInfo(index)
-                if name and ns.IsNumber(skill) then saved[name] = skill end
+                if name and ns.IsNumber(skill) then saved[(name:gsub("^Classic ", ""))] = skill end
             end
         end
     end
@@ -36,11 +64,13 @@ end
 function Shop.Rows()
     local professions = Shop.Professions()
     local known, scanned = knownNames()
+    local filter = Shop.Filter()
     local rows = {}
     for itemID, entry in pairs(ns.RecipeDB or {}) do
         local recipe = ns.Logic.RecipeFromDB(entry)
         local yourSkill = professions[recipe.profession]
-        if (yourSkill or Shop.showAll) and not known[recipe.name:lower()] then
+        local shown = filter == EVERYTHING or (filter == nil and yourSkill) or recipe.profession == filter
+        if shown and not known[recipe.name:lower()] then
             local price = ns.Prices.AH(itemID)
             if price then
                 local margin = ns.Logic.CraftMargin(recipe, ns.Prices.AH, ns.AH_CUT)

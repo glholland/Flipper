@@ -63,7 +63,8 @@ def main():
         if (item.get("item_class") or {}).get("id") != 9:
             continue
         name = item.get("name", "")
-        if ": " not in name:
+        # "Blueprint:" items teach Forever campsite structures (Anvil, Spinning Wheel...), not crafts to sell.
+        if ": " not in name or name.startswith("Blueprint:"):
             continue
         prof = (item.get("item_subclass") or {}).get("name")
         craft = crafts.get((prof, name.split(": ", 1)[1].lower()))

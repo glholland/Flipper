@@ -9,6 +9,7 @@ function events.ADDON_LOADED(name)
     if name ~= addonName then return end
     FlipperDB = ns.ApplyDefaults(FlipperDB, ns.DEFAULTS)
     FlipperCharDB = ns.ApplyDefaults(FlipperCharDB, ns.CHAR_DEFAULTS)
+    ns.Recipes.Migrate()
     ns.Scanner.OnChanged = refresh
     ns.Tooltip.Install()
 end
@@ -89,7 +90,7 @@ SLASH_FLIPPER2 = "/flipper"
 SlashCmdList.FLIPPER = function(message)
     local command, arg = strtrim(message or ""):lower():match("^(%S*)%s*(.-)$")
     if command == "recipes" and arg == "all" then
-        ns.RecipeShop.showAll = not ns.RecipeShop.showAll
+        ns.RecipeShop.SetEverything()
         ns.Window.Toggle("recipes")
         return
     end

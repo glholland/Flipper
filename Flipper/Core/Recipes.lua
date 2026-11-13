@@ -30,22 +30,46 @@ local function schematicToRecipe(info, schematic, profession)
     }
 end
 
+-- "Classic Tailoring" (an expansion skill line) and "Tailoring" are the same profession here.
+local function professionName(info)
+    if not info then return nil end
+    local name = info.parentProfessionName
+    if type(name) ~= "string" or name == "" then name = info.professionName end
+    if type(name) ~= "string" or name == "" then return nil end
+    return (name:gsub("^Classic ", ""))
+end
+
+-- Bumped when saved recipe data was written wrongly; older saves are discarded and
+-- re-read the next time each profession window opens.
+Recipes.DATA_VERSION = 2
+
+function Recipes.Migrate()
+    if FlipperCharDB and FlipperCharDB.recipeVersion ~= Recipes.DATA_VERSION then
+        FlipperCharDB.recipes = {}
+        FlipperCharDB.recipeVersion = Recipes.DATA_VERSION
+        byReagent = nil
+    end
+end
+
 -- Reads every learned recipe in the open profession window. Returns how many were stored.
 function Recipes.Capture()
     local T, saved = C_TradeSkillUI, store()
     if not saved or not T or not T.GetFilteredRecipeIDs or not T.GetRecipeSchematic then return 0 end
     local base = T.GetBaseProfessionInfo and T.GetBaseProfessionInfo()
-    local profession = base and base.professionName or "?"
-    if base and ns.IsNumber(base.skillLevel) and FlipperCharDB then
+    local baseName = professionName(base)
+    if baseName and ns.IsNumber(base.skillLevel) and FlipperCharDB then
         FlipperCharDB.professions = FlipperCharDB.professions or {}
-        FlipperCharDB.professions[profession] = base.skillLevel
+        FlipperCharDB.professions[baseName] = base.skillLevel
     end
     local count = 0
     for _, id in ipairs(T.GetFilteredRecipeIDs() or {}) do
         local info = T.GetRecipeInfo(id)
         if info and info.learned then
+            -- Ask per recipe: right after switching windows the base profession and the
+            -- listed recipes can briefly disagree.
+            local profession = T.GetProfessionInfoByRecipeID and professionName(T.GetProfessionInfoByRecipeID(id))
             local ok, schematic = pcall(T.GetRecipeSchematic, id, false)
-            local recipe = ok and schematicToRecipe(info, schematic, profession)
+            local recipe = ok and profession and schematicToRecipe(info, schematic, profession)
             if recipe then saved[id] = recipe; count = count + 1 end
         end
     end
