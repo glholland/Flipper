@@ -167,7 +167,8 @@ local function layout()
         else header:Hide() end
     end
     -- Enough rows to fill the height.
-    local visible = math.max(1, math.floor((frame:GetHeight() + TOP_ROWS_Y - 34) / ROW_HEIGHT))
+    -- Bottom reserve: status line + progress bar.
+    local visible = math.max(1, math.floor((frame:GetHeight() + TOP_ROWS_Y - 50) / ROW_HEIGHT))
     for i = #frame.rows + 1, visible do frame.rows[i] = Window.CreateRow(frame, i) end
     for i, row in ipairs(frame.rows) do
         row:SetWidth(width - 2 * PAD)
@@ -250,6 +251,27 @@ function Window.Refresh()
             math.min(#data, Window.offset + Window.visible), #data)
     end
     frame.status:SetText(status)
+end
+
+-- Progress bar for whichever scan is running. A known total fills the bar; an unknown one
+-- sweeps back and forth. Always shows the elapsed time. Called every tick (0.1 s).
+function Window.UpdateProgress()
+    local frame = Window.frame
+    if not frame or not frame:IsShown() then return end
+    local fraction, label, elapsed = ns.Market.Progress()
+    if not label then fraction, label, elapsed = ns.Scanner.Progress() end
+    local bar = frame.progress
+    if not label then bar:Hide(); return end
+    if not fraction then
+        local t = (elapsed % 2) / 2                     -- 0..1 every 2 seconds
+        fraction = t < 0.5 and t * 2 or (1 - t) * 2     -- there and back
+        bar:SetStatusBarColor(0.38, 0.65, 0.98)
+    else
+        bar:SetStatusBarColor(0.29, 0.87, 0.5)
+    end
+    bar:SetValue(math.max(0.02, math.min(1, fraction)))
+    bar.text:SetText(string.format("%s  (%d:%02d)", label, math.floor(elapsed / 60), math.floor(elapsed % 60)))
+    bar:Show()
 end
 
 -- Full scan button: shows the cooldown countdown. Called on refresh and once a second.
@@ -426,6 +448,19 @@ function Window.Create()
     frame.status:SetPoint("BOTTOMRIGHT", -24, 12)
     frame.status:SetJustifyH("LEFT")
     frame.status:SetWordWrap(false)
+
+    frame.progress = CreateFrame("StatusBar", nil, frame)
+    frame.progress:SetPoint("BOTTOMLEFT", 14, 28)
+    frame.progress:SetPoint("BOTTOMRIGHT", -24, 28)
+    frame.progress:SetHeight(14)
+    frame.progress:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    frame.progress:SetMinMaxValues(0, 1)
+    frame.progress.bg = frame.progress:CreateTexture(nil, "BACKGROUND")
+    frame.progress.bg:SetAllPoints()
+    frame.progress.bg:SetColorTexture(0, 0, 0, 0.5)
+    frame.progress.text = frame.progress:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.progress.text:SetPoint("CENTER")
+    frame.progress:Hide()
 
     local grip = CreateFrame("Button", nil, frame)
     grip:SetSize(16, 16)

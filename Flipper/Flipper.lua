@@ -80,6 +80,7 @@ frame:SetScript("OnUpdate", function(_, delta)
     elapsed = 0
     ns.Scanner.Tick()
     ns.Market.Tick()
+    ns.Window.UpdateProgress()
     if sinceSecond >= 1 then
         sinceSecond = 0
         ns.Window.UpdateMarketButton()

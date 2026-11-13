@@ -20,6 +20,18 @@ function Scanner.Supported()
     return true
 end
 
+-- For the progress bar: fraction done (nil while the total is unknown), label, seconds running.
+function Scanner.Progress()
+    if not Scanner.running then return nil end
+    local elapsed = GetTime() - (Scanner.startedAt or GetTime())
+    if Scanner.state == "evaluating" then
+        local total = #Scanner.results
+        local done = total - #(Scanner.queue or {})
+        return total > 0 and done / total or 0, string.format("Checking vendor prices: %d / %d", done, total), elapsed
+    end
+    return nil, string.format("Browsing the AH: %d items so far", Scanner.total), elapsed
+end
+
 function Scanner.Stop(reason)
     Scanner.running, Scanner.pending, Scanner.waiting = false, nil, nil
     Scanner.state = reason or "stopped"
@@ -66,7 +78,7 @@ function Scanner.Start()
     if not Scanner.Supported() then Scanner.Stop("unsupported"); return end
     if not ns.Compat.AuctionHouseOpen() then Scanner.Stop("closed"); return end
     Scanner.rows, Scanner.results, Scanner.seen, Scanner.total, Scanner.deferred = {}, {}, {}, 0, 0
-    Scanner.running, Scanner.state = true, "browse"
+    Scanner.running, Scanner.state, Scanner.startedAt = true, "browse", GetTime()
     request("SendBrowseQuery", {searchString = "", sorts = {}, filters = {}})
     changed()
 end

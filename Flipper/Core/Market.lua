@@ -41,7 +41,8 @@ function Market.Start()
         ns.Print(string.format("full scans are limited; next one in %d:%02d", math.floor(wait / 60), wait % 60))
         return
     end
-    Market.state, Market.deadline = "replicating", GetTime() + 90
+    Market.state, Market.deadline, Market.startedAt = "replicating", GetTime() + 90, GetTime()
+    Market.loaded, Market.total = 0, 0
     db().lastScan = time()
     C_AuctionHouse.ReplicateItems()
     changed()
@@ -71,6 +72,8 @@ local function readSnapshot(acceptPartial)
             end
         end
     end
+    Market.total = C_AuctionHouse.GetNumReplicateItems()
+    Market.loaded = Market.total - pending
     if pending > 0 and not acceptPartial then return nil end
     return snapshot
 end
@@ -120,6 +123,17 @@ function Market.Tick()
         local snapshot = readSnapshot(GetTime() > Market.readUntil)
         if snapshot then finish(snapshot) end
     end
+end
+
+-- For the progress bar: fraction done (nil while unknown), label, seconds running.
+function Market.Progress()
+    if Market.state ~= "replicating" and Market.state ~= "reading" then return nil end
+    local elapsed = GetTime() - (Market.startedAt or GetTime())
+    if Market.state == "reading" and Market.total > 0 then
+        return Market.loaded / Market.total,
+            string.format("Full scan: loading auction details %d / %d", Market.loaded, Market.total), elapsed
+    end
+    return nil, "Full scan: waiting for the auction house", elapsed
 end
 
 -- Estimated units sold per day, sell-through (0-1) and hours observed, or nil.
