@@ -685,13 +685,23 @@ function Window.Create()
     frame.search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
     frame.search:SetScript("OnEditFocusGained", function(self) self.hint:Hide() end)
     frame.search:SetScript("OnEditFocusLost", function(self) self.hint:SetShown(self:GetText() == "") end)
-    frame.search:SetScript("OnTextChanged", function(self)
-        local text = self:GetText()
-        if text == Window.historySearch then return end
+    -- Search once typing pauses (0.5 s after the last key), or right away on Enter.
+    local function applySearch(text)
+        if text == (Window.historySearch or "") then return end
         Window.historySearch, Window.offset = text, 0
-        if Window.searchPending then return end
-        Window.searchPending = true
-        C_Timer.After(0.25, function() Window.searchPending = false; Window.Refresh() end)
+        Window.Refresh()
+    end
+    local searchToken = 0
+    frame.search:SetScript("OnTextChanged", function(self, userInput)
+        if not userInput then return end
+        searchToken = searchToken + 1
+        local token, text = searchToken, self:GetText()
+        C_Timer.After(0.5, function() if token == searchToken then applySearch(text) end end)
+    end)
+    frame.search:SetScript("OnEnterPressed", function(self)
+        searchToken = searchToken + 1
+        applySearch(self:GetText())
+        self:ClearFocus()
     end)
     frame.search:Hide()
 

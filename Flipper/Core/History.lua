@@ -57,9 +57,15 @@ function History.Invalidate() cache = {} end
 
 function History.Summary(search)
     search = search and search ~= "" and search:lower() or nil
-    if cache.rows and cache.search == search then return cache.rows end
-    local rows = History.BuildSummary(search)
-    cache.rows, cache.search = rows, search
+    if not cache.all then cache.all, cache.filtered = History.BuildSummary(nil), nil end
+    if not search then return cache.all end
+    -- Searching filters the built list by name: cheap, no rebuild.
+    if cache.filtered and cache.search == search then return cache.filtered end
+    local rows = {}
+    for _, row in ipairs(cache.all) do
+        if row.name:lower():find(search, 1, true) then rows[#rows + 1] = row end
+    end
+    cache.filtered, cache.search = rows, search
     return rows
 end
 
