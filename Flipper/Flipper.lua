@@ -11,6 +11,7 @@ function events.ADDON_LOADED(name)
     FlipperCharDB = ns.ApplyDefaults(FlipperCharDB, ns.CHAR_DEFAULTS)
     ns.Recipes.Migrate()
     ns.Scanner.OnChanged = refresh
+    ns.Market.OnChanged = refresh
     ns.Tooltip.Install()
 end
 
@@ -34,7 +35,13 @@ function events.PLAYER_LOGIN()
     end
 end
 function events.AUCTION_HOUSE_SHOW() ns.Scanner.InstallHooks(); refresh() end
-function events.AUCTION_HOUSE_CLOSED() ns.Scanner.OnEvent("AUCTION_HOUSE_CLOSED"); ns.Prices.ClearCache(); refresh() end
+function events.AUCTION_HOUSE_CLOSED()
+    ns.Scanner.OnEvent("AUCTION_HOUSE_CLOSED")
+    ns.Market.OnEvent("AUCTION_HOUSE_CLOSED")
+    ns.Prices.ClearCache()
+    refresh()
+end
+events.REPLICATE_ITEM_LIST_UPDATE = function() ns.Market.OnEvent("REPLICATE_ITEM_LIST_UPDATE") end
 events.AUCTION_HOUSE_BROWSE_RESULTS_UPDATED = function() ns.Scanner.OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED") end
 events.AUCTION_HOUSE_BROWSE_RESULTS_ADDED = function() ns.Scanner.OnEvent("AUCTION_HOUSE_BROWSE_RESULTS_ADDED") end
 events.AUCTION_HOUSE_BROWSE_FAILURE = function() ns.Scanner.OnEvent("AUCTION_HOUSE_BROWSE_FAILURE") end
@@ -65,18 +72,25 @@ frame:SetScript("OnEvent", function(_, event, ...)
 end)
 for event in pairs(events) do frame:RegisterEvent(event) end
 
-local elapsed = 0
+local elapsed, sinceSecond = 0, 0
 frame:SetScript("OnUpdate", function(_, delta)
     elapsed = elapsed + delta
     if elapsed < 0.1 then return end
+    sinceSecond = sinceSecond + elapsed
     elapsed = 0
     ns.Scanner.Tick()
+    ns.Market.Tick()
+    if sinceSecond >= 1 then
+        sinceSecond = 0
+        ns.Window.UpdateMarketButton()
+    end
 end)
 
 local commands = {
     [""] = function() ns.Window.Toggle() end,
     flips = function() ns.Window.Toggle("flips") end,
     vendor = function() ns.Window.Toggle("vendor") end,
+    market = function() ns.Window.Toggle("flips"); ns.Market.Start() end,
     bags = function() ns.Window.Toggle("bags") end,
     crafts = function() ns.Window.Toggle("crafts") end,
     recipes = function() ns.Window.Toggle("recipes") end,
@@ -89,7 +103,7 @@ local commands = {
     end,
 }
 local function help()
-    ns.Print("/flip - window | /flip scan | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
+    ns.Print("/flip - window | /flip scan | /flip market (full scan for sales) | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
 end
 SLASH_FLIPPER1 = "/flip"
 SLASH_FLIPPER2 = "/flipper"

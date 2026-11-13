@@ -9,6 +9,8 @@ A World of Warcraft: Forever addon that points at easy money:
 - **Recipes:** unlearned recipes on the AH that would make money, with the vendor price or "Drop".
 - **Tooltips:** AH value after the 5% cut, vendor price and the best use, on every item.
 
+- **Sales estimates:** the AH never says whether someone else's auction sold, so the **Full scan** button (Flips tab, `/flip market`) records every auction and compares it with your previous full scan: listings that ran out of time count as expired, ones the same seller relisted elsewhere as cancelled, the rest as sold. That fills the **Sold/day** columns and a "Market: ~x sold/day, y% of listings sell" tooltip line over a few days of AH visits (one full scan per 15 minutes). A seller who cancels without relisting is counted as a sale, so treat it as an estimate. Your own exact sold/failed counts come from Journalator.
+
 Sale values use a *fair price*: the cheapest listing, unless it's more than twice Auctionator's 21-day average (one wishful seller), in which case the average.
 
 Prices come from Auctionator (or TSM if installed). Flipper never buys anything itself: clicking a flip opens Auctionator's shopping search, and you buy with its buttons.

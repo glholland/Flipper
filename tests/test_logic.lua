@@ -93,6 +93,36 @@ eq("vendor flip no AH price", Logic.VendorFlip(100, nil, 0.05, 10, 0.2), nil)
 local fair = function(id) return id == 10 and 800 or price(id) end
 eq("craft sells at fair price", Logic.CraftMargin(bag, price, 0.05, fair).value, 1520)  -- 2 * 760
 
+-- CompareSnapshots
+local function snap(item, seller, price, q, tl) return {[item] = {[seller] = {[price] = {q = q, tl = tl}}}} end
+local r1 = Logic.CompareSnapshots(snap(1, "A", 100, 5, 3), {}, 600)
+eq("vanished early -> sold", r1[1].sold, 5)
+local r2 = Logic.CompareSnapshots(snap(1, "A", 100, 5, 3), {}, 200000)
+eq("vanished after max time -> expired", r2[1].expired, 5)
+eq("expired not sold", r2[1].sold, 0)
+local r3 = Logic.CompareSnapshots(snap(1, "A", 100, 5, 3), snap(1, "A", 90, 5, 3), 600)
+eq("undercut repost -> cancelled", r3[1].cancelled, 5)
+eq("undercut repost not sold", r3[1].sold, 0)
+local r4 = Logic.CompareSnapshots(snap(1, "A", 100, 20, 3), snap(1, "A", 100, 15, 3), 600)
+eq("partial buy -> sold", r4[1].sold, 5)
+local r5 = Logic.CompareSnapshots(snap(1, "A", 100, 10, 3), snap(1, "A", 95, 6, 3), 600)
+eq("repost of part -> cancelled part", r5[1].cancelled, 6)
+eq("repost of part -> rest sold", r5[1].sold, 4)
+local r6 = Logic.CompareSnapshots(snap(1, "A", 100, 5, 0), {}, 3600)
+eq("short band gone after 1h -> expired", r6[1].expired, 5)
+eq("new listings only -> nothing", next(Logic.CompareSnapshots({}, snap(1, "A", 100, 5, 3), 600)), nil)
+local r7 = Logic.CompareSnapshots(snap(1, "A", 100, 5, 3), snap(1, "B", 90, 5, 3), 600)
+eq("other seller's listing is not a relist", r7[1].sold, 5)
+
+-- AddObservation / SalesRate: 12h observed, 6 sold, 2 expired
+local stats = Logic.AddObservation({}, {[1] = {sold = 6, expired = 2, cancelled = 0}}, 43200, 100)
+local perDay, through = Logic.SalesRate(stats, 1, 100, 14)
+eq("sold per day", perDay, 12)
+eq("sell-through", through, 0.75)
+eq("unseen item sells 0/day", (Logic.SalesRate(stats, 2, 100, 14)), 0)
+eq("under an hour observed -> nil", (Logic.SalesRate(Logic.AddObservation({}, {}, 600, 100), 1, 100, 14)), nil)
+eq("outside window ignored", (Logic.SalesRate(stats, 1, 120, 14)), nil)
+
 -- SortRows
 local function names(rows) local t = {} for i, r in ipairs(rows) do t[i] = r.name end return table.concat(t, ",") end
 local function sample() return {{name = "b", v = 2}, {name = "a", v = nil}, {name = "c", v = 5}, {name = "d", v = 2}} end

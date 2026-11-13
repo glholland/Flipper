@@ -106,6 +106,77 @@ function Logic.RecipeFromDB(entry)
         qtyMin = entry[5], qtyMax = entry[6], reagents = reagents}
 end
 
+------------------------------------------------------------------------
+-- Sales estimates from two full AH snapshots
+------------------------------------------------------------------------
+-- snapshot[itemID][seller][unitPrice] = {q = quantity, tl = shortest time-left band}
+-- Bands (Enum.AuctionHouseTimeLeftBand): 0 <30m, 1 <2h, 2 <12h, 3 <48h.
+Logic.BAND_MAX_SECONDS = {[0] = 1800, [1] = 7200, [2] = 43200, [3] = 172800}
+
+-- What happened to listings missing from `now`, `elapsed` seconds after `prev`:
+-- {[itemID] = {sold, expired, cancelled}}. Rules, most cautious first:
+--  * could have run out of time (elapsed >= its band's maximum) -> expired
+--  * the same seller listed new quantity of the item at another price -> cancelled (relisted)
+--  * otherwise -> sold (a seller cancelling and walking away also lands here)
+function Logic.CompareSnapshots(prev, now, elapsed)
+    local result = {}
+    for itemID, sellers in pairs(prev) do
+        for seller, prices in pairs(sellers) do
+            local current = now[itemID] and now[itemID][seller] or {}
+            local relisted = 0
+            for price, entry in pairs(current) do
+                local before = prices[price] and prices[price].q or 0
+                if entry.q > before then relisted = relisted + entry.q - before end
+            end
+            for price, entry in pairs(prices) do
+                local gone = entry.q - (current[price] and current[price].q or 0)
+                if gone > 0 then
+                    local r = result[itemID] or {sold = 0, expired = 0, cancelled = 0}
+                    result[itemID] = r
+                    if elapsed >= (Logic.BAND_MAX_SECONDS[entry.tl] or 0) then
+                        r.expired = r.expired + gone
+                    else
+                        local cancelled = math.min(gone, relisted)
+                        relisted = relisted - cancelled
+                        r.cancelled = r.cancelled + cancelled
+                        r.sold = r.sold + gone - cancelled
+                    end
+                end
+            end
+        end
+    end
+    return result
+end
+
+-- Folds one comparison into rolling per-day stats:
+-- stats = {observed = {[day] = seconds}, items = {[itemID] = {[day] = {s, e, c}}}}
+function Logic.AddObservation(stats, result, elapsed, day)
+    stats.observed = stats.observed or {}
+    stats.items = stats.items or {}
+    stats.observed[day] = (stats.observed[day] or 0) + elapsed
+    for itemID, r in pairs(result) do
+        local days = stats.items[itemID] or {}
+        stats.items[itemID] = days
+        local d = days[day] or {0, 0, 0}
+        days[day] = {d[1] + r.sold, d[2] + r.expired, d[3] + r.cancelled}
+    end
+    return stats
+end
+
+-- Estimated units sold per day and sell-through (sold / everything that left the AH) over
+-- the last `window` days, or nil without at least an hour of observation.
+function Logic.SalesRate(stats, itemID, today, window)
+    if not stats or not stats.observed then return nil end
+    local observed, sold, ended = 0, 0, 0
+    for day = today - window + 1, today do
+        observed = observed + (stats.observed[day] or 0)
+        local d = stats.items and stats.items[itemID] and stats.items[itemID][day]
+        if d then sold = sold + d[1]; ended = ended + d[1] + d[2] + d[3] end
+    end
+    if observed < 3600 then return nil end
+    return sold / (observed / 86400), ended > 0 and sold / ended or nil, observed
+end
+
 -- Sorts rows in place by getter(row). Rows whose value is nil always go last, whichever
 -- direction; equal values fall back to row.name so the order is stable between refreshes.
 function Logic.SortRows(rows, getter, descending)

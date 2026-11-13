@@ -33,12 +33,30 @@ addVendorLine = function(tooltip, itemID)
     tooltip:AddLine("  Vendor: " .. Money.Format(buy) .. (seller and (" at " .. ns.Vendors.Describe(seller)) or ""), 0.8, 0.8, 0.8)
 end
 
+-- "Sells ~3.2/day (70% of listings sell)" and "You: 12 sold, 3 didn't".
+local function addSalesLines(tooltip, data)
+    if not FlipperDB or not FlipperDB.tooltip or not data or not ns.IsNumber(data.id) or not tooltip.AddLine then return end
+    local perDay, through, hours = ns.Market.Rate(data.id)
+    if perDay then
+        local text = "  Market: ~" .. ns.Market.FormatRate(perDay):gsub("/d", " sold/day")
+        if through then text = text .. string.format(", %d%% of listings sell", math.floor(through * 100 + 0.5)) end
+        tooltip:AddLine(text .. string.format(" (%.0fh watched)", hours or 0), 0.8, 0.8, 0.8)
+    end
+    local name = ns.Compat.ItemInfo(data.id)
+    local sold, failed = ns.Market.Own(name)
+    if sold then
+        tooltip:AddLine(string.format("  You: %d sold, %d didn't (%d%%)", sold, failed,
+            math.floor(sold / (sold + failed) * 100 + 0.5)), 0.8, 0.8, 0.8)
+    end
+end
+
 function Tooltip.Install()
     if Tooltip.installed then return end
     if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
             -- Never let a pricing hiccup break the game's tooltip.
             pcall(addLines, tooltip, data)
+            pcall(addSalesLines, tooltip, data)
         end)
         Tooltip.installed = true
     end

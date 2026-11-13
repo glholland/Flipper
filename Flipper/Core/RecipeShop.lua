@@ -88,6 +88,7 @@ function Shop.Rows()
                     local vendorPrice = ns.Vendors.BuyPrice(itemID)
                     rows[#rows + 1] = {itemID = itemID, name = name, icon = icon, quality = quality,
                         vendor = vendorPrice, sellers = vendorPrice and ns.Vendors.Sellers(itemID) or nil,
+                        output = recipe.output, outputRate = ns.Market.Rate(recipe.output),
                         price = price, profit = margin.profit, payback = ns.Logic.Payback(price, margin.profit),
                         profession = recipe.profession, skill = recipe.skill, status = status}
                 end

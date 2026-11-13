@@ -43,7 +43,9 @@ local TABS = {
         {"AH min", function(r) return r.minPrice end, function(r) return Money.Format(r.minPrice) end},
         {"Vendor", function(r) return r.vendor end, function(r) return Money.Format(r.vendor) end},
         {"Profit/ea", function(r) return r.profit end, function(r) return green(Money.Format(r.profit)) end},
-        {"Listed", function(r) return r.quantity end, function(r) return tostring(r.quantity) end},
+        {"Listed", function(r) return r.quantity end, function(r) return tostring(r.quantity) end, 64},
+        {"Sold/day", function(r) return (ns.Market.Rate(r.itemID)) end,
+            function(r) return ns.Market.FormatRate((ns.Market.Rate(r.itemID))) end, 70},
     },
     bags = {
         default = {4, true},
@@ -77,6 +79,8 @@ local TABS = {
         {"AH fair", function(r) return r.fair end, function(r) return Money.Format(r.fair) end},
         {"Profit/ea", function(r) return r.profit end, function(r) return green(Money.Format(r.profit)) end},
         {"Where to buy", function(r) return r.where end, function(r) return r.where end, 220},
+        {"Sold/day", function(r) return (ns.Market.Rate(r.itemID)) end,
+            function(r) return ns.Market.FormatRate((ns.Market.Rate(r.itemID))) end, 70},
     },
     recipes = {
         sortKey = "recipes:v2",
@@ -90,10 +94,15 @@ local TABS = {
         {"Pays back", function(r) return r.payback end, function(r)
             return r.payback and (r.payback .. (r.payback == 1 and " craft" or " crafts")) or ""
         end},
-        {"Skill", function(r) return r.skill end, function(r) return string.format(RECIPE_STATUS[r.status], r.skill) end},
+        {"Skill", function(r) return r.skill end, function(r) return string.format(RECIPE_STATUS[r.status], r.skill) end, 60},
+        {"Sells/day", function(r) return r.outputRate end, function(r) return ns.Market.FormatRate(r.outputRate) end, 70},
     },
 }
-local MAX_COLUMNS = 6
+local MAX_COLUMNS = 7
+local MARKET_STATUS = {
+    replicating = "Full scan: waiting for the AH...", reading = "Full scan: reading listings...",
+    timeout = "Full scan: the AH didn't answer. Try again later.", unsupported = "Full scans aren't available on this client.",
+}
 
 local function craftRows()
     local rows = {}
@@ -210,11 +219,16 @@ function Window.Refresh()
             status = string.format("%d flips from %d items on the AH.", #s.rows, s.total)
             if s.deferred > 0 then status = status .. string.format(" %d items had no data yet; scan again.", s.deferred) end
         end
-        frame.scan:SetEnabled(ns.Compat.AuctionHouseOpen() and not s.running)
+        if MARKET_STATUS[ns.Market.state] then status = MARKET_STATUS[ns.Market.state] end
+        local open = ns.Compat.AuctionHouseOpen()
+        frame.scan:SetEnabled(open and not s.running)
         frame.scan:Show()
+        Window.UpdateMarketButton()
+        frame.market:Show()
         frame.filter:Hide()
     else
         frame.scan:Hide()
+        frame.market:Hide()
         frame.filter:SetShown(Window.tab == "recipes")
         frame.filter:SetText(ns.RecipeShop.FilterLabel())
         if Window.tab == "recipes" then
@@ -236,6 +250,15 @@ function Window.Refresh()
             math.min(#data, Window.offset + Window.visible), #data)
     end
     frame.status:SetText(status)
+end
+
+-- Full scan button: shows the cooldown countdown. Called on refresh and once a second.
+function Window.UpdateMarketButton()
+    local frame = Window.frame
+    if not frame or not frame:IsShown() or Window.tab ~= "flips" then return end
+    local wait = ns.Market.CooldownLeft()
+    frame.market:SetEnabled(ns.Compat.AuctionHouseOpen() and wait == 0 and not MARKET_STATUS[ns.Market.state])
+    frame.market:SetText(wait > 0 and string.format("Full %d:%02d", math.floor(wait / 60), wait % 60) or "Full scan")
 end
 
 local function clickHeader(index)
@@ -343,6 +366,24 @@ function Window.Create()
     frame.scan:SetPoint("TOPRIGHT", -PAD, -28)
     frame.scan:SetText("Scan")
     frame.scan:SetScript("OnClick", function() ns.Scanner.Start() end)
+
+    -- Full scan: snapshot of every auction, compared with the last one to estimate sales.
+    frame.market = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.market:SetSize(90, 22)
+    frame.market:SetPoint("RIGHT", frame.scan, "LEFT", -4, 0)
+    frame.market:SetText("Full scan")
+    frame.market:SetScript("OnClick", function() ns.Market.Start() end)
+    frame.market:SetMotionScriptsWhileDisabled(true)
+    frame.market:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:AddLine("Full scan: estimate sales")
+        GameTooltip:AddLine("Records every auction. Each later full scan compares against it to estimate how many sold, "
+            .. "expired or were relisted. Run one every AH visit; the Sold/day columns fill in over a few days. "
+            .. "Limited to one every 15 minutes; may freeze the game for a moment.", 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    frame.market:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    frame.market:Hide()
 
     -- Recipes tab: which professions to show. Click cycles through the choices.
     frame.filter = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
