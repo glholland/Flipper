@@ -282,7 +282,7 @@ end
 
 function Window.Refresh()
     local frame = Window.frame
-    if not frame or not frame:IsShown() then return end
+    if not frame or not frame:IsVisible() then return end
     layout()
     local data = Window.Data()
     Window.offset = math.max(0, math.min(Window.offset, #data - Window.visible))
@@ -369,7 +369,7 @@ end
 -- sweeps back and forth. Always shows the elapsed time. Called every tick (0.1 s).
 function Window.UpdateProgress()
     local frame = Window.frame
-    if not frame or not frame:IsShown() then return end
+    if not frame or not frame:IsVisible() then return end
     local fraction, label, elapsed = ns.Market.Progress()
     if not label then fraction, label, elapsed = ns.Scanner.Progress() end
     local bar = frame.progress
@@ -389,7 +389,7 @@ end
 -- Full scan button: shows the cooldown countdown. Called on refresh and once a second.
 function Window.UpdateMarketButton()
     local frame = Window.frame
-    if not frame or not frame:IsShown() or Window.tab ~= "flips" then return end
+    if not frame or not frame:IsVisible() or Window.tab ~= "flips" then return end
     local wait = ns.Market.CooldownLeft()
     frame.market:SetEnabled(ns.Compat.AuctionHouseOpen() and wait == 0 and not MARKET_STATUS[ns.Market.state])
     frame.market:SetText(wait > 0 and string.format("Full %d:%02d", math.floor(wait / 60), wait % 60) or "Full scan")
@@ -475,95 +475,90 @@ function Window.CreateRow(parent, index)
     return row
 end
 
-local function saveGeometry(frame)
+local function saveGeometry(floating)
     local saved = FlipperDB.window
-    -- Docked and floating windows keep separate sizes; a docked position is relative to the AH.
-    if Window.docked then
-        saved.dockWidth, saved.dockHeight = math.floor(frame:GetWidth()), math.floor(frame:GetHeight())
-        return
-    end
-    saved.width, saved.height = math.floor(frame:GetWidth()), math.floor(frame:GetHeight())
-    local point, _, relativePoint, x, y = frame:GetPoint(1)
+    saved.width, saved.height = math.floor(floating:GetWidth()), math.floor(floating:GetHeight())
+    local point, _, relativePoint, x, y = floating:GetPoint(1)
     saved.point, saved.relativePoint, saved.x, saved.y = point, relativePoint, x, y
 end
 
-local function restorePosition(frame)
-    local saved = FlipperDB.window
+-- The content (tabs, list, buttons) lives in Window.frame and is shown in one host at a
+-- time: the floating window, or the Flipper tab inside the auction house.
+function Window.AttachTo(host)
+    local frame = Window.Create()
+    if frame:GetParent() == host then return end
+    frame:SetParent(host)
     frame:ClearAllPoints()
-    frame:SetPoint(saved.point or "CENTER", UIParent, saved.relativePoint or "CENTER", saved.x or 0, saved.y or 0)
+    if host == Window.floating then
+        frame:SetAllPoints(host)
+    else
+        frame:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 8)    -- Flipper's tab strip replaces the AH's search row
+        frame:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+    end
+    frame:Show()
+    Window.Refresh()
+end
+
+function Window.IsVisible()
+    return Window.frame and Window.frame:IsVisible() or false
 end
 
 ------------------------------------------------------------------------
--- Docking beside the auction house. Flipper's window is anchored to the AH frame's right
--- edge; nothing on Blizzard's AH frame is changed, so buying stays untainted.
+-- Flipper tab in the auction house, through LibAHTab (shipped with Auctionator), the same
+-- library Auctionator's and Disenchantry's tabs use. Flipper's view fills the AH's content
+-- area while its tab is selected; Blizzard's own tab list isn't modified.
 ------------------------------------------------------------------------
 function Window.OnAuctionHouseShow()
     local ah = AuctionHouseFrame
-    if not ah then return end
-    if not Window.ahButton then
-        -- A child button that only sits on top of the AH frame: shows/hides Flipper.
-        local button = CreateFrame("Button", "FlipperAHButton", ah, "UIPanelButtonTemplate")
-        button:SetSize(76, 22)
-        button:SetPoint("BOTTOMRIGHT", ah, "TOPRIGHT", -28, 1)
-        button:SetText("Flipper")
-        button:SetScript("OnClick", function()
-            local frame = Window.Create()
-            if frame:IsShown() then frame:Hide() else Window.Dock(); frame:Show() end
-        end)
-        Window.ahButton = button
-    end
-    if FlipperDB.dock ~= false then
-        Window.autoShown = not (Window.frame and Window.frame:IsShown())
-        Window.Dock()
-        Window.Toggle("flips")
-    end
+    if not ah or Window.ahPanel then return end
+    local lib = LibStub and LibStub("LibAHTab-1-0", true)
+    if not lib then return end   -- without Auctionator: use /flip for the floating window
+    local panel = CreateFrame("Frame", "FlipperAHPanel", ah)
+    panel:SetPoint("TOPLEFT", ah, "TOPLEFT", 5, -34)          -- same area Disenchantry's tab uses
+    panel:SetPoint("BOTTOMRIGHT", ah, "BOTTOMRIGHT", -5, 5)
+    panel:SetFrameLevel(ah:GetFrameLevel() + 10)
+    panel:EnableMouse(true)
+    local bg = panel:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.05, 0.05, 0.05, 0.92)
+    panel:SetScript("OnShow", function(self)
+        if Window.floating then Window.floating:Hide() end
+        Window.AttachTo(self)
+    end)
+    local ok = pcall(lib.CreateTab, lib, "Flipper", panel, "Flipper", "Flipper")
+    if ok then Window.ahPanel = panel end
 end
 
-function Window.Dock()
-    local frame, ah = Window.Create(), AuctionHouseFrame
-    if not ah or FlipperDB.dock == false then return end
-    -- Fit the space right of the AH: a window wider than that gets pushed back over the AH
-    -- by the keep-on-screen rule. Compare in this frame's own scale.
-    local scale = frame:GetEffectiveScale()
-    local space = (UIParent:GetRight() * UIParent:GetEffectiveScale() - ah:GetRight() * ah:GetEffectiveScale()) / scale
-    local saved = FlipperDB.window
-    local width = math.max(420, math.min(saved.dockWidth or 720, space - 8))
-    frame:SetSize(width, saved.dockHeight or ah:GetHeight() * ah:GetEffectiveScale() / scale)
-    frame:ClearAllPoints()
-    frame:SetPoint("TOPLEFT", ah, "TOPRIGHT", 4, 0)
-    Window.docked = true
-end
-
-function Window.OnAuctionHouseClosed()
-    if not Window.docked or not Window.frame then return end
-    Window.docked = false
-    if Window.autoShown then Window.frame:Hide() end
-    local saved = FlipperDB.window
-    Window.frame:SetSize(saved.width or DEFAULT_W, saved.height or DEFAULT_H)
-    restorePosition(Window.frame)
-end
+function Window.OnAuctionHouseClosed() end
 
 function Window.Create()
     if Window.frame then return Window.frame end
     local saved = FlipperDB.window
-    local frame = CreateFrame("Frame", "FlipperFrame", UIParent, "BasicFrameTemplateWithInset")
-    Window.frame = frame
-    frame:SetSize(saved.width or DEFAULT_W, saved.height or DEFAULT_H)
-    frame:SetPoint(saved.point or "CENTER", UIParent, saved.relativePoint or "CENTER", saved.x or 0, saved.y or 0)
-    frame:SetMovable(true)
-    frame:SetResizable(true)
-    if frame.SetResizeBounds then frame:SetResizeBounds(MIN_W, MIN_H, MAX_W, MAX_H) end
-    frame:EnableMouse(true)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); saveGeometry(self) end)
-    frame:SetClampedToScreen(true)
-    frame:SetFrameStrata("HIGH")
-    frame:Hide()
+    -- Floating window: title bar, dragging, resize grip.
+    local floating = CreateFrame("Frame", "FlipperFrame", UIParent, "BasicFrameTemplateWithInset")
+    Window.floating = floating
+    floating:SetSize(saved.width or DEFAULT_W, saved.height or DEFAULT_H)
+    floating:SetPoint(saved.point or "CENTER", UIParent, saved.relativePoint or "CENTER", saved.x or 0, saved.y or 0)
+    floating:SetMovable(true)
+    floating:SetResizable(true)
+    if floating.SetResizeBounds then floating:SetResizeBounds(MIN_W, MIN_H, MAX_W, MAX_H) end
+    floating:EnableMouse(true)
+    floating:RegisterForDrag("LeftButton")
+    floating:SetScript("OnDragStart", floating.StartMoving)
+    floating:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); saveGeometry(self) end)
+    floating:SetClampedToScreen(true)
+    floating:SetFrameStrata("HIGH")
+    floating:Hide()
     tinsert(UISpecialFrames, "FlipperFrame")
-    frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    frame.title:SetPoint("TOP", 0, -5)
-    frame.title:SetText("Flipper")
+    floating.title = floating:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    floating.title:SetPoint("TOP", 0, -5)
+    floating.title:SetText("Flipper")
+    floating:SetScript("OnShow", function(self) Window.AttachTo(self) end)
+
+    -- Content frame, moved between hosts.
+    local frame = CreateFrame("Frame", nil, floating)
+    Window.frame = frame
+    frame:SetAllPoints(floating)
 
     -- Flat text tabs: grey, white on hover, gold with an underline when selected.
     frame.tabs = {}
@@ -732,14 +727,16 @@ function Window.Create()
     frame.progress.text:SetPoint("CENTER")
     frame.progress:Hide()
 
-    local grip = CreateFrame("Button", nil, frame)
+    -- Resize grip belongs to the floating window (the AH decides its own size).
+    local grip = CreateFrame("Button", nil, floating)
     grip:SetSize(16, 16)
     grip:SetPoint("BOTTOMRIGHT", -4, 4)
+    grip:SetFrameLevel(frame:GetFrameLevel() + 5)
     grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
     grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
     grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
-    grip:SetScript("OnMouseDown", function() frame:StartSizing("BOTTOMRIGHT") end)
-    grip:SetScript("OnMouseUp", function() frame:StopMovingOrSizing(); saveGeometry(frame); Window.Refresh() end)
+    grip:SetScript("OnMouseDown", function() floating:StartSizing("BOTTOMRIGHT") end)
+    grip:SetScript("OnMouseUp", function() floating:StopMovingOrSizing(); saveGeometry(floating); Window.Refresh() end)
 
     -- Live relayout while dragging, at most ten times a second.
     local pending
@@ -752,23 +749,26 @@ function Window.Create()
     return frame
 end
 
+-- With a tab name: show that tab (inside the AH if Flipper's AH tab is open, else floating).
+-- Without: toggle the floating window.
 function Window.Toggle(tab)
-    local frame = Window.Create()
+    Window.Create()
+    local inAH = Window.ahPanel and Window.ahPanel:IsVisible()
     if tab then
         Window.tab, Window.offset = tab, 0
-        frame:Show()
+        if not inAH then Window.floating:Show() end
         Window.Refresh()
-    elseif frame:IsShown() then frame:Hide()
-    else frame:Show() end
+    elseif Window.floating:IsShown() then Window.floating:Hide()
+    else Window.floating:Show() end
 end
 
 -- /flip reset: back to the default size and position.
 function Window.ResetGeometry()
     FlipperDB.window.width, FlipperDB.window.height, FlipperDB.window.point = nil, nil, nil
-    if Window.frame then
-        Window.frame:ClearAllPoints()
-        Window.frame:SetSize(DEFAULT_W, DEFAULT_H)
-        Window.frame:SetPoint("CENTER")
+    if Window.floating then
+        Window.floating:ClearAllPoints()
+        Window.floating:SetSize(DEFAULT_W, DEFAULT_H)
+        Window.floating:SetPoint("CENTER")
         Window.Refresh()
     end
 end

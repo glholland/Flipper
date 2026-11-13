@@ -3,7 +3,7 @@ local addonName, ns = ...
 local frame = CreateFrame("Frame")
 local events = {}
 
-local function refresh() if ns.Window.frame and ns.Window.frame:IsShown() then ns.Window.Refresh() end end
+local function refresh() if ns.Window.IsVisible() then ns.Window.Refresh() end end
 
 function events.ADDON_LOADED(name)
     if name ~= addonName then return end
@@ -32,7 +32,7 @@ function events.PLAYER_LOGIN()
     if HandleModifiedItemClick and hooksecurefunc then
         hooksecurefunc("HandleModifiedItemClick", function(link)
             local w = ns.Window
-            if w.frame and w.frame:IsShown() and w.tab == "history" and IsShiftKeyDown() then
+            if w.IsVisible() and w.tab == "history" and IsShiftKeyDown() then
                 local id = ns.Compat.ItemIDFromLink(link)
                 if id then w.ShowHistory(id) end
             end
@@ -112,10 +112,6 @@ local commands = {
     recipes = function() ns.Window.Toggle("recipes") end,
     verify = function() ns.RecipeShop.Verify() end,
     reset = function() ns.Window.ResetGeometry(); ns.Print("window size and position reset") end,
-    dock = function()
-        FlipperDB.dock = FlipperDB.dock == false
-        ns.Print("open beside the auction house: " .. (FlipperDB.dock and "on" or "off"))
-    end,
     scan = function() ns.Window.Toggle("flips"); ns.Scanner.Start() end,
     tooltip = function()
         FlipperDB.tooltip = not FlipperDB.tooltip
@@ -123,7 +119,7 @@ local commands = {
     end,
 }
 local function help()
-    ns.Print("/flip - window | /flip scan | /flip market (full scan for sales) | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip history [item] | /flip dock | /flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
+    ns.Print("/flip - window | /flip scan | /flip market (full scan for sales) | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip history [item] |/flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
 end
 SLASH_FLIPPER1 = "/flip"
 SLASH_FLIPPER2 = "/flipper"
