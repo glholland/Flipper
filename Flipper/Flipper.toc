@@ -19,6 +19,7 @@ Core\Recipes.lua
 Core\Bags.lua
 Core\Scanner.lua
 Core\Market.lua
+Core\History.lua
 Core\Vendors.lua
 Core\RecipeShop.lua
 UI\Window.lua

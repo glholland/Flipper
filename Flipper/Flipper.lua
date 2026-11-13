@@ -28,16 +28,31 @@ local function onPricesUpdated()
 end
 function events.PLAYER_LOGIN()
     ns.Scanner.InstallHooks()
+    -- Shift-click an item link while the History tab is open to show that item.
+    if HandleModifiedItemClick and hooksecurefunc then
+        hooksecurefunc("HandleModifiedItemClick", function(link)
+            local w = ns.Window
+            if w.frame and w.frame:IsShown() and w.tab == "history" and IsShiftKeyDown() then
+                local id = ns.Compat.ItemIDFromLink(link)
+                if id then w.ShowHistory(id) end
+            end
+        end)
+    end
     ns.RecipeShop.Professions()
     local api = Auctionator and Auctionator.API and Auctionator.API.v1
     if api and api.RegisterForDBUpdate then
         pcall(api.RegisterForDBUpdate, ns.CALLER_ID, onPricesUpdated)
     end
 end
-function events.AUCTION_HOUSE_SHOW() ns.Scanner.InstallHooks(); refresh() end
+function events.AUCTION_HOUSE_SHOW()
+    ns.Scanner.InstallHooks()
+    ns.Window.OnAuctionHouseShow()
+    refresh()
+end
 function events.AUCTION_HOUSE_CLOSED()
     ns.Scanner.OnEvent("AUCTION_HOUSE_CLOSED")
     ns.Market.OnEvent("AUCTION_HOUSE_CLOSED")
+    ns.Window.OnAuctionHouseClosed()
     ns.Prices.ClearCache()
     refresh()
 end
@@ -97,6 +112,10 @@ local commands = {
     recipes = function() ns.Window.Toggle("recipes") end,
     verify = function() ns.RecipeShop.Verify() end,
     reset = function() ns.Window.ResetGeometry(); ns.Print("window size and position reset") end,
+    dock = function()
+        FlipperDB.dock = FlipperDB.dock == false
+        ns.Print("open beside the auction house: " .. (FlipperDB.dock and "on" or "off"))
+    end,
     scan = function() ns.Window.Toggle("flips"); ns.Scanner.Start() end,
     tooltip = function()
         FlipperDB.tooltip = not FlipperDB.tooltip
@@ -104,7 +123,7 @@ local commands = {
     end,
 }
 local function help()
-    ns.Print("/flip - window | /flip scan | /flip market (full scan for sales) | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
+    ns.Print("/flip - window | /flip scan | /flip market (full scan for sales) | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip history [item] | /flip dock | /flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
 end
 SLASH_FLIPPER1 = "/flip"
 SLASH_FLIPPER2 = "/flipper"
@@ -113,6 +132,12 @@ SlashCmdList.FLIPPER = function(message)
     if command == "recipes" and arg == "all" then
         ns.RecipeShop.SetEverything()
         ns.Window.Toggle("recipes")
+        return
+    end
+    if command == "history" then
+        -- Item link, item ID or nothing (summary). Match on the original text: links are case-sensitive.
+        local id = ns.Compat.ItemIDFromLink(message) or tonumber(arg)
+        ns.Window.ShowHistory(id)
         return
     end
     if command == "minprofit" then

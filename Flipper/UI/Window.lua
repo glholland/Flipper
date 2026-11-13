@@ -7,10 +7,11 @@ local Money = ns.Money
 
 local ROW_HEIGHT, HEADER_Y, TOP_ROWS_Y = 22, -52, -66
 local VALUE_WIDTH, ICON_SPACE, PAD = 92, 34, 12
-local MIN_W, MIN_H, MAX_W, MAX_H = 600, 260, 1400, 1000
+local MIN_W, MIN_H, MAX_W, MAX_H = 680, 260, 1400, 1000
 local DEFAULT_W, DEFAULT_H = 760, 440
-local TAB_ORDER = {"flips", "vendor", "bags", "crafts", "recipes"}
-local TAB_LABEL = {flips = "AH flips", vendor = "Vendor", bags = "Bags", crafts = "Crafts", recipes = "Recipes"}
+local TAB_ORDER = {"flips", "vendor", "bags", "crafts", "recipes", "history"}
+local TAB_LABEL = {flips = "AH flips", vendor = "Vendor", bags = "Bags", crafts = "Crafts", recipes = "Recipes",
+    history = "History"}
 
 local ACTION_TEXT = {ah = "|cff60a5faAuction|r", vendor = "Vendor", craft = "|cff4ade80Craft|r", none = "|cff9ca3af-|r"}
 local RECIPE_STATUS = {
@@ -98,6 +99,44 @@ local TABS = {
         {"Sells/day", function(r) return r.outputRate end, function(r) return ns.Market.FormatRate(r.outputRate) end, 70},
     },
 }
+local function count(v) return v and tostring(v) or "|cff9ca3af-|r" end
+
+-- History: a summary of every watched item, or day by day for Window.historyItem.
+TABS.history = {
+    default = {2, true},
+    {"Item (click for its history)", function(r) return r.name end, function(r) return qualityName(r) end},
+    {"Sold", function(r) return r.sold end, function(r) return green(r.sold) end, 64},
+    {"Expired", function(r) return r.expired end, function(r) return tostring(r.expired) end, 64},
+    {"Relisted", function(r) return r.cancelled end, function(r) return tostring(r.cancelled) end, 64},
+    {"Sell-through", function(r) return r.through end, function(r)
+        return string.format("%d%%", math.floor(r.through * 100 + 0.5))
+    end, 80},
+    {"Sold/day", function(r) return r.perDay end, function(r) return ns.Market.FormatRate(r.perDay) end, 70},
+}
+TABS.historyItem = {
+    sortKey = "historyItem",
+    default = {1, true},
+    barColumn = 2,
+    {"Day", function(r) return r.day end, function(r) return r.name end},
+    {"Lowest", function(r) return r.low end, function(r) return r.low and Money.Format(r.low) or count(nil) end, 110},
+    {"Highest", function(r) return r.high end, function(r) return r.high and Money.Format(r.high) or count(nil) end, 100},
+    {"Listed", function(r) return r.listed end, function(r) return count(r.listed) end, 60},
+    {"Sold", function(r) return r.sold end, function(r) return r.sold and green(r.sold) or count(nil) end, 56},
+    {"Expired", function(r) return r.expired end, function(r) return count(r.expired) end, 60},
+    {"Relisted", function(r) return r.cancelled end, function(r) return count(r.cancelled) end, 64},
+}
+
+function Window.Spec()
+    if Window.tab == "history" and Window.historyItem then return TABS.historyItem end
+    return TABS[Window.tab]
+end
+
+-- Opens the History tab on one item (row right-click, /flip history <item>, shift-click a link).
+function Window.ShowHistory(itemID)
+    Window.historyItem = ns.IsNumber(itemID) and itemID or nil
+    Window.Toggle("history")
+end
+
 local MAX_COLUMNS = 7
 local MARKET_STATUS = {
     replicating = "Full scan: waiting for the AH...", reading = "Full scan: reading listings...",
@@ -119,10 +158,10 @@ local function sortState()
     FlipperDB.window.sort = saved
     -- sortKey changes when a tab's columns change, so an old saved column index can't point
     -- at the wrong column.
-    local key = TABS[Window.tab].sortKey or Window.tab
+    local key = Window.Spec().sortKey or Window.tab
     local state = saved[key]
     if not state then
-        local default = TABS[Window.tab].default
+        local default = Window.Spec().default
         state = {column = default[1], descending = default[2]}
         saved[key] = state
     end
@@ -139,9 +178,11 @@ function Window.Data()
         for i, row in ipairs(ns.Vendors.FlipRows()) do rows[i] = row end
     elseif Window.tab == "bags" then rows = ns.Bags.Rows()
     elseif Window.tab == "recipes" then rows = ns.RecipeShop.Rows()
+    elseif Window.tab == "history" then
+        rows = Window.historyItem and ns.History.ItemDays(Window.historyItem) or ns.History.Summary()
     else rows = craftRows() end
     local state = sortState()
-    local column = TABS[Window.tab][state.column]
+    local column = Window.Spec()[state.column]
     if column then ns.Logic.SortRows(rows, column[2], state.descending) end
     return rows
 end
@@ -151,7 +192,7 @@ end
 local function layout()
     local frame = Window.frame
     local width = frame:GetWidth()
-    local columns = TABS[Window.tab]
+    local columns = Window.Spec()
     local count = #columns
     local widths, fixed = {}, 0
     for i = 2, count do widths[i] = columns[i][4] or VALUE_WIDTH; fixed = fixed + widths[i] end
@@ -183,13 +224,27 @@ local function layout()
         row.inView = i <= visible
         if not row.inView then row:Hide() end
     end
-    Window.visible = visible
+    Window.visible, Window.colX, Window.colW = visible, x, widths
 end
 
 local function fill(row, data)
     row.data = data
-    row.icon:SetTexture(data.icon or 134400)
-    for c, column in ipairs(TABS[Window.tab]) do row.cells[c]:SetText(column[3](data) or "") end
+    local spec = Window.Spec()
+    local icon = data.icon
+    if spec == TABS.historyItem then icon = select(4, ns.Compat.ItemInfo(Window.historyItem)) end
+    row.icon:SetTexture(icon or 134400)
+    for c, column in ipairs(spec) do row.cells[c]:SetText(column[3](data) or "") end
+    -- Price bar behind one column, scaled to the highest value shown.
+    local barColumn = spec.barColumn
+    local value = barColumn and spec[barColumn][2](data)
+    if value and Window.barMax and Window.barMax > 0 then
+        row.bar:ClearAllPoints()
+        row.bar:SetPoint("LEFT", Window.colX[barColumn] - 2, 0)
+        row.bar:SetWidth(math.max(1, (Window.colW[barColumn] - 6) * value / Window.barMax))
+        row.bar:Show()
+    else
+        row.bar:Hide()
+    end
     row:Show()
 end
 
@@ -199,9 +254,18 @@ function Window.Refresh()
     layout()
     local data = Window.Data()
     Window.offset = math.max(0, math.min(Window.offset, #data - Window.visible))
+    local spec = Window.Spec()
+    Window.barMax = nil
+    if spec.barColumn then
+        for _, entry in ipairs(data) do
+            local v = spec[spec.barColumn][2](entry)
+            if v and v > (Window.barMax or 0) then Window.barMax = v end
+        end
+    end
+    frame.back:SetShown(spec == TABS.historyItem)
     local state = sortState()
     for i, header in ipairs(frame.headers) do
-        local column = TABS[Window.tab][i]
+        local column = Window.Spec()[i]
         if column then
             local arrow = state.column == i and (state.descending and " |cffffd100v|r" or " |cffffd100^|r") or ""
             header.text:SetText(column[1] .. arrow)
@@ -239,6 +303,19 @@ function Window.Refresh()
             local sources = LibQuestieDB and "your vendor visits + Questie" or "vendors you have opened (install Questie for more)"
             status = #data .. " vendor items selling for 20%+ more on the AH. From " .. sources
                 .. ". |cff9ca3af*|r = list price, open the vendor for exact."
+        elseif Window.tab == "history" and Window.historyItem then
+            local name = ns.Compat.ItemInfo(Window.historyItem) or ("item " .. Window.historyItem)
+            local perDay, through = ns.Market.Rate(Window.historyItem)
+            status = name .. ": prices from Auctionator, sales from Flipper's full scans."
+            if perDay then
+                status = status .. string.format(" ~%s sold/day", ns.Market.FormatRate(perDay):gsub("/d", ""))
+                if through then status = status .. string.format(", %d%% sell", math.floor(through * 100 + 0.5)) end
+            end
+        elseif Window.tab == "history" then
+            status = #data == 0
+                and "No sales history yet: press Full scan on the AH flips tab on each AH visit. Right-click any row to see one item."
+                or string.format("%d items, %.0f hours of AH watched (last %d days). Right-click any row in any tab for its history.",
+                    #data, ns.History.HoursWatched(), ns.Market.WINDOW_DAYS)
         elseif Window.tab == "crafts" then
             status = #data == 0 and "Open each profession window once to teach Flipper your recipes."
                 or (#data .. " recipes, AH prices from " .. (ns.Prices.Source() or "nothing"))
@@ -303,6 +380,12 @@ function Window.CreateRow(parent, index)
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(ROW_HEIGHT - 4, ROW_HEIGHT - 4)
     row.icon:SetPoint("LEFT", 8, 0)
+    -- History tab: bar behind the price column, scaled to the highest price shown.
+    row.bar = row:CreateTexture(nil, "BACKGROUND")
+    row.bar:SetHeight(ROW_HEIGHT - 8)
+    row.bar:SetColorTexture(0.29, 0.87, 0.5, 0.25)
+    row.bar:Hide()
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row.cells = {}
     for c = 1, MAX_COLUMNS do
         local cell = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -328,12 +411,21 @@ function Window.CreateRow(parent, index)
         elseif Window.tab == "flips" or Window.tab == "recipes" then
             GameTooltip:AddLine("Click: open in Auctionator to buy", 0.3, 0.9, 0.5)
         end
+        if Window.tab == "history" then
+            GameTooltip:AddLine("Click: day-by-day history", 0.3, 0.9, 0.5)
+        else
+            GameTooltip:AddLine("Right-click: price and sales history", 0.3, 0.9, 0.5)
+        end
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    row:SetScript("OnClick", function(self)
+    row:SetScript("OnClick", function(self, button)
         local data = self.data
         if not data then return end
+        if data.itemID and (button == "RightButton" or Window.tab == "history") then
+            Window.ShowHistory(data.itemID)
+            return
+        end
         local pin = (Window.tab == "vendor") ~= IsShiftKeyDown()
         if Window.tab == "vendor" or Window.tab == "recipes" then
             if pin and data.sellers and data.sellers[1] then ns.Vendors.Waypoint(data.sellers[1]); return end
@@ -348,8 +440,57 @@ end
 local function saveGeometry(frame)
     local saved = FlipperDB.window
     saved.width, saved.height = math.floor(frame:GetWidth()), math.floor(frame:GetHeight())
+    -- While docked the position is relative to the AH frame; only the size is worth keeping.
+    if Window.docked then return end
     local point, _, relativePoint, x, y = frame:GetPoint(1)
     saved.point, saved.relativePoint, saved.x, saved.y = point, relativePoint, x, y
+end
+
+local function restorePosition(frame)
+    local saved = FlipperDB.window
+    frame:ClearAllPoints()
+    frame:SetPoint(saved.point or "CENTER", UIParent, saved.relativePoint or "CENTER", saved.x or 0, saved.y or 0)
+end
+
+------------------------------------------------------------------------
+-- Docking beside the auction house. Flipper's window is anchored to the AH frame's right
+-- edge; nothing on Blizzard's AH frame is changed, so buying stays untainted.
+------------------------------------------------------------------------
+function Window.OnAuctionHouseShow()
+    local ah = AuctionHouseFrame
+    if not ah then return end
+    if not Window.ahButton then
+        -- A child button that only sits on top of the AH frame: shows/hides Flipper.
+        local button = CreateFrame("Button", "FlipperAHButton", ah, "UIPanelButtonTemplate")
+        button:SetSize(76, 22)
+        button:SetPoint("BOTTOMRIGHT", ah, "TOPRIGHT", -28, 1)
+        button:SetText("Flipper")
+        button:SetScript("OnClick", function()
+            local frame = Window.Create()
+            if frame:IsShown() then frame:Hide() else Window.Dock(); frame:Show() end
+        end)
+        Window.ahButton = button
+    end
+    if FlipperDB.dock ~= false then
+        Window.autoShown = not (Window.frame and Window.frame:IsShown())
+        Window.Dock()
+        Window.Toggle("flips")
+    end
+end
+
+function Window.Dock()
+    local frame, ah = Window.Create(), AuctionHouseFrame
+    if not ah or FlipperDB.dock == false then return end
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPLEFT", ah, "TOPRIGHT", 4, 0)
+    Window.docked = true
+end
+
+function Window.OnAuctionHouseClosed()
+    if not Window.docked or not Window.frame then return end
+    Window.docked = false
+    if Window.autoShown then Window.frame:Hide() end
+    restorePosition(Window.frame)
 end
 
 function Window.Create()
@@ -377,10 +518,14 @@ function Window.Create()
     frame.tabs = {}
     for i, key in ipairs(TAB_ORDER) do
         local tab = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        tab:SetSize(78, 22)
-        tab:SetPoint("TOPLEFT", PAD + (i - 1) * 82, -28)
+        tab:SetSize(72, 22)
+        tab:SetPoint("TOPLEFT", PAD + (i - 1) * 75, -28)
         tab:SetText(TAB_LABEL[key])
-        tab:SetScript("OnClick", function() Window.tab, Window.offset = key, 0; Window.Refresh() end)
+        tab:SetScript("OnClick", function()
+            Window.tab, Window.offset = key, 0
+            if key == "history" then Window.historyItem = nil end
+            Window.Refresh()
+        end)
         frame.tabs[key] = tab
     end
     frame.scan = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -424,6 +569,14 @@ function Window.Create()
     end)
     frame.filter:SetScript("OnLeave", function() GameTooltip:Hide() end)
     frame.filter:Hide()
+
+    -- History, one item: back to the summary.
+    frame.back = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.back:SetSize(100, 22)
+    frame.back:SetPoint("TOPRIGHT", -PAD, -28)
+    frame.back:SetText("< All items")
+    frame.back:SetScript("OnClick", function() Window.historyItem, Window.offset = nil, 0; Window.Refresh() end)
+    frame.back:Hide()
 
     frame.headers = {}
     for i = 1, MAX_COLUMNS do

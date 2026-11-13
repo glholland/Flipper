@@ -32,6 +32,17 @@ function ns.IsNumber(value)
     return type(value) == "number" and value == value and value < math.huge
 end
 
+-- Day numbers shared with Auctionator's price history: days since 1 Jan 2020, local midnight.
+local DAY0
+function ns.Day(t)
+    DAY0 = DAY0 or time({year = 2020, month = 1, day = 1, hour = 0})
+    return math.floor(((t or time()) - DAY0) / 86400)
+end
+function ns.DayStart(day)
+    DAY0 = DAY0 or time({year = 2020, month = 1, day = 1, hour = 0})
+    return DAY0 + day * 86400
+end
+
 function ns.Print(message)
     if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Flipper:|r " .. tostring(message)) end
 end

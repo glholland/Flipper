@@ -13,12 +13,20 @@ local MAX_GAP = 48 * 3600       -- older snapshots can't tell sold from expired
 local WINDOW_DAYS = 14
 local LOAD_WAIT = 8             -- seconds to wait for seller names to load
 
+-- Stats day numbers switched to Auctionator's (see ns.Day); version 1 data used UTC days.
+local STATS_VERSION = 2
+
 local function db()
     FlipperDB.market = FlipperDB.market or {stats = {}}
-    return FlipperDB.market
+    local store = FlipperDB.market
+    if store.version ~= STATS_VERSION then
+        store.stats, store.version = {}, STATS_VERSION
+    end
+    return store
 end
 
-local function today() return math.floor(time() / 86400) end
+local function today() return ns.Day() end
+Market.WINDOW_DAYS = WINDOW_DAYS
 
 local function changed() if Market.OnChanged then Market.OnChanged() end end
 
