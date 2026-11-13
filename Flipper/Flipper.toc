@@ -1,0 +1,21 @@
+## Interface: 16001
+## Title: Flipper
+## Notes: Finds money: AH listings below vendor price, the best use of each bag item, and craft margins for your recipes.
+## Author: glholland
+## Version: 0.1.0
+## IconTexture: 133784
+## OptionalDeps: Auctionator
+## SavedVariables: FlipperDB
+## SavedVariablesPerCharacter: FlipperCharDB
+
+Core\Init.lua
+Core\Money.lua
+Core\Logic.lua
+Core\Compat.lua
+Core\Prices.lua
+Core\Recipes.lua
+Core\Bags.lua
+Core\Scanner.lua
+UI\Window.lua
+UI\Tooltip.lua
+Flipper.lua

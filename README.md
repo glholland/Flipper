@@ -1,0 +1,35 @@
+# Flipper
+
+A World of Warcraft: Forever addon that points at easy money:
+
+- **Flips:** auction house listings cheaper than what a vendor pays for them. Buy, then sell to any vendor.
+- **Bags:** the best use of every item you carry: vendor it, auction it, or craft it into something worth more (e.g. sell fish raw vs. cook them).
+- **Crafts:** profit per craft for every recipe your character knows, at current AH prices.
+- **Tooltips:** AH value after the 5% cut, vendor price and the best use, on every item.
+
+Prices come from Auctionator (or TSM if installed). Flipper never buys anything itself: clicking a flip opens Auctionator's shopping search, and you buy with its buttons.
+
+## Getting Started
+
+1. The addon folder `Flipper/` is linked into `_forever_\Interface\AddOns\Flipper`. Restart the game fully the first time (a `/reload` doesn't pick up new addon folders).
+2. Scan the AH once with Auctionator so Flipper has prices.
+3. Open each profession window once (Tailoring, Enchanting, Cooking...) so Flipper learns your recipes.
+4. Commands:
+   - `/flip` toggles the window
+   - `/flip scan` opens the Flips tab and scans (auction house must be open)
+   - `/flip bags`, `/flip crafts` open those tabs
+   - `/flip minprofit 50` ignores flips under 50 copper per item (default 10)
+   - `/flip tooltip` turns tooltip lines on/off
+
+## Development
+
+Pure pricing logic lives in `Flipper/Core/Logic.lua` and `Core/Money.lua` and is tested offline under Lua 5.1:
+
+```bash
+pip install lupa
+python tests/run_tests.py --syntax
+```
+
+Forever runs Blizzard's Mainline UI on the 12.1.5 API: use `C_Item`, `C_Container`, `C_TradeSkillUI`, `C_AuctionHouse`; the old item globals (`GetItemInfo`, `GetItemSpell`...) are gone. Blizzard's UI source for the client is the `forever` branch of [Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source/tree/forever).
+
+Plan: `docs/superpowers/plans/2026-11-13-flipper.md`. Third-party notices: `NOTICE`.
