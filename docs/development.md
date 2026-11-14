@@ -64,19 +64,43 @@ This runs `tests/test_logic.lua` under Lua 5.1 and compiles every file in the TO
 | Job | Checks |
 |---|---|
 | Lint | `luac5.1 -p` on every Lua file, then `luacheck` (`.luacheckrc`) |
-| Tests | `python tests/run_tests.py --syntax` |
+| Tests (logic + fake auction house) | `python tests/run_tests.py --syntax`: logic tests, scan scenarios against the fake auction house, and a compile of every TOC file |
 | TOC and tools | `python tools/check_toc.py`; Python tools compile |
-| Package | `python tools/package.py`; uploads a dev zip (kept 14 days) |
+| Package | `python tools/package.py`, then `python tools/verify_package.py`; uploads a dev zip (kept 14 days) |
+
+The fake auction house (`tests/fake_wow.lua`) and everything else under `tests/`, `tools/` and `docs/` stay out of the addon. The package contains only the `Flipper/` folder plus `NOTICE`, and `verify_package.py` fails the build if any development file gets into the zip.
 
 ## Releases
 
-Tag a commit and push the tag:
+Releases are published by `.github/workflows/release.yml`. There are two ways to start one.
+
+**From GitHub (usual).** Actions > **Release** > **Run workflow**, on `main`:
+
+- **Version bump:** `minor` (default), `patch` or `major`, counted from the latest release tag. The first release is `0.2.0`.
+- **Exact version:** type one (e.g. `1.0.0`) to override the bump.
+- **Pre-release:** adds `-beta.1`, `-beta.2`... and marks the GitHub release as a pre-release.
+
+**From a tag.** Tag a commit yourself and push it:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
-The Release workflow reruns CI, builds `Flipper-0.2.0.zip` with that version written into the TOC, and publishes a GitHub release with generated notes. A tag containing a hyphen (`v0.3.0-beta1`) is published as a pre-release.
+Either way the workflow:
+
+1. Works out the version (`tools/next_version.py`) and refuses one that is malformed, not newer than the latest release, or already tagged.
+2. Runs the full CI, including the fake auction house tests.
+3. Builds `Flipper-<version>.zip` with that version written into the TOC, checks it holds only the addon, and computes its SHA-256.
+4. Tags the commit (when started from GitHub).
+5. Publishes the GitHub release with the zip, the checksum and notes generated from the merged pull requests since the previous release, grouped by label (`.github/release.yml`).
+
+Nothing is published if any step fails. To check a release locally first:
+
+```bash
+python tools/next_version.py --bump minor
+python tools/package.py --version 0.2.0
+python tools/verify_package.py dist/Flipper-0.2.0.zip --version 0.2.0
+```
 
 To work on the addon locally, link the `Flipper` folder into `_forever_/Interface/AddOns` instead of copying it.
