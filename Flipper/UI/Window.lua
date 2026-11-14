@@ -467,6 +467,8 @@ function Window.CreateRow(parent, index)
             GameTooltip:AddLine("Click: open in Auctionator. Shift-click: map pin to the vendor.", 0.3, 0.9, 0.5, true)
         elseif Window.tab == "flips" or Window.tab == "recipes" or Window.tab == "deals" then
             GameTooltip:AddLine("Click: open in Auctionator to buy", 0.3, 0.9, 0.5)
+        elseif Window.tab == "bags" and self.data.bagSlot then
+            GameTooltip:AddLine("Click: sell it in Auctionator's Selling tab", 0.3, 0.9, 0.5)
         end
         if Window.tab == "history" then
             GameTooltip:AddLine("Click: day-by-day history", 0.3, 0.9, 0.5)
@@ -483,6 +485,7 @@ function Window.CreateRow(parent, index)
             Window.ShowHistory(data.itemID)
             return
         end
+        if Window.tab == "bags" then ns.Bags.SellInAuctionator(data); return end
         local pin = (Window.tab == "vendor") ~= IsShiftKeyDown()
         if Window.tab == "vendor" or Window.tab == "recipes" then
             if pin and data.sellers and data.sellers[1] then ns.Vendors.Waypoint(data.sellers[1]); return end
