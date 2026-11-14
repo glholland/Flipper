@@ -1,35 +1,121 @@
 name: Release
 
-# Push a tag like v0.2.0 to publish a GitHub release with the installable zip.
+# Two ways to release:
+#  * Actions > Release > Run workflow: pick patch / minor / major (or type a version, or tick
+#    pre-release). The workflow works out the version, runs CI, tags the commit and publishes.
+#  * Push a tag yourself (git tag v0.3.0 && git push origin v0.3.0): same, minus the tagging.
+# Either way the GitHub release gets Flipper-<version>.zip, its SHA-256, and generated notes.
 on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump from the latest release"
+        type: choice
+        options: [minor, patch, major]
+        default: minor
+      version:
+        description: "Exact version instead (e.g. 1.0.0); leave empty to use the bump"
+        type: string
+        required: false
+      prerelease:
+        description: "Pre-release (adds -beta.N)"
+        type: boolean
+        default: false
   push:
     tags: ["v*"]
 
 permissions:
   contents: read
 
-jobs:
-  checks:
-    uses: ./.github/workflows/ci.yml
+concurrency:
+  group: release
+  cancel-in-progress: false
 
-  release:
-    name: Publish release
-    needs: checks
+jobs:
+  prepare:
+    name: Work out the version
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      previous_tag: ${{ steps.version.outputs.previous_tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Build zip for this tag
-        run: python tools/package.py --version "${GITHUB_REF_NAME#v}"
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Releases come from main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
         run: |
-          prerelease=""
-          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" dist/*.zip \
-            --title "Flipper ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag $prerelease
+          echo "::error::Run the Release workflow from main (it was started on ${GITHUB_REF_NAME})."
+          exit 1
+      - id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            python tools/next_version.py --tag "$GITHUB_REF_NAME"
+          else
+            args=()
+            if [ -n "$VERSION" ]; then args+=(--version "$VERSION"); else args+=(--bump "$BUMP"); fi
+            if [ "$PRERELEASE" = "true" ]; then args+=(--prerelease); fi
+            python tools/next_version.py "${args[@]}"
+          fi
+
+  checks:
+    name: CI
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Publish ${{ needs.prepare.outputs.tag }}
+    needs: [prepare, checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      PREVIOUS_TAG: ${{ needs.prepare.outputs.previous_tag }}
+      PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Build the zip
+        run: python tools/package.py --version "$VERSION"
+      - name: Check the zip holds only the addon
+        run: python tools/verify_package.py "dist/Flipper-$VERSION.zip" --version "$VERSION"
+      - name: Checksum
+        run: cd dist && sha256sum "Flipper-$VERSION.zip" > "Flipper-$VERSION.zip.sha256" && cat "Flipper-$VERSION.zip.sha256"
+      - name: Tag the commit
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Flipper $VERSION"
+          git push origin "$TAG"
+      - name: Publish the GitHub release
+        run: |
+          args=(--title "Flipper $VERSION" --generate-notes --verify-tag)
+          if [ -n "$PREVIOUS_TAG" ]; then args+=(--notes-start-tag "$PREVIOUS_TAG"); fi
+          if [ "$PRERELEASE" = "true" ]; then args+=(--prerelease); else args+=(--latest); fi
+          gh release create "$TAG" "dist/Flipper-$VERSION.zip" "dist/Flipper-$VERSION.zip.sha256" "${args[@]}"
+      - name: Summary
+        run: |
+          {
+            echo "### Flipper $VERSION released"
+            echo ""
+            echo "- Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG"
+            echo "- Previous: ${PREVIOUS_TAG:-none}"
+            echo "- Pre-release: $PRERELEASE"
+          } >> "$GITHUB_STEP_SUMMARY"
