@@ -13,3 +13,5 @@ ignore = {
 }
 -- Globals Flipper is meant to write: saved variables and the slash command.
 globals = {"FlipperDB", "FlipperCharDB", "SLASH_FLIPPER1", "SLASH_FLIPPER2", "SlashCmdList"}
+-- Test files reuse short names (r, price) from one case to the next.
+files["tests/"] = {ignore = {"431"}}
