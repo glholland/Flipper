@@ -50,16 +50,7 @@ function events.PLAYER_LOGIN()
 end
 -- Auto quick scan, a few seconds after the AH opens (Auctionator starts its own autoscan
 -- 0-2 s after opening; by then it has, and Flipper reads that instead).
-local AUTO_DELAY, FRESH_SECONDS = 3, 5 * 60
-local function autoQuickScan(openedAt)
-    if not FlipperDB.autoQuickScan or not ns.Compat.AuctionHouseOpen() then return end
-    if ns.Window.ScanBusy() or ns.Market.AuctionatorAutoscans() then return end
-    if (ns.Scanner.lastForeignSearch or 0) >= openedAt then return end    -- you're already searching
-    local full, summary = ns.Market.AuctionatorTimes()
-    local newest = math.max(full or 0, summary or 0, ns.Market.LastFullScan() or 0, ns.Scanner.doneAt or 0)
-    if time() - newest < FRESH_SECONDS then return end
-    ns.Scanner.Start()
-end
+local AUTO_DELAY = 3
 
 function events.AUCTION_HOUSE_SHOW()
     ns.Scanner.InstallHooks()
@@ -67,7 +58,7 @@ function events.AUCTION_HOUSE_SHOW()
     ns.Window.OnAuctionHouseShow()
     refresh()
     local openedAt = GetTime()
-    C_Timer.After(AUTO_DELAY, function() autoQuickScan(openedAt) end)
+    C_Timer.After(AUTO_DELAY, function() ns.Scanner.MaybeAutoScan(openedAt) end)
 end
 function events.AUCTION_HOUSE_CLOSED()
     ns.Scanner.OnEvent("AUCTION_HOUSE_CLOSED")

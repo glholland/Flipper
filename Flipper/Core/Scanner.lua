@@ -146,6 +146,22 @@ end
 
 function Scanner.Busy() return Scanner.running and true or false end
 
+-- Auto quick scan when the AH opens (`openedAt` = GetTime() then). Skipped when the option
+-- is off, any scan is running, Auctionator is set to scan on open (Flipper reads its scan),
+-- you've searched since opening, or prices are under FRESH_SECONDS old. Returns true if it started.
+local FRESH_SECONDS = 5 * 60
+function Scanner.MaybeAutoScan(openedAt)
+    if not FlipperDB or not FlipperDB.autoQuickScan or not ns.Compat.AuctionHouseOpen() then return false end
+    local market = ns.Market
+    if Scanner.running or market.Busy() or market.AuctionatorScanning() or market.AuctionatorAutoscans() then return false end
+    if (Scanner.lastForeignSearch or -1) >= openedAt then return false end
+    local full, summary = market.AuctionatorTimes()
+    local newest = math.max(full or 0, summary or 0, market.LastFullScan() or 0, Scanner.doneAt or 0)
+    if time() - newest < FRESH_SECONDS then return false end
+    Scanner.Start()
+    return true
+end
+
 function Scanner.Start()
     if Scanner.running then return end
     if not Scanner.Supported() then Scanner.Stop("unsupported"); return end

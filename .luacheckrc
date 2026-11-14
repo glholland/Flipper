@@ -15,3 +15,5 @@ ignore = {
 globals = {"FlipperDB", "FlipperCharDB", "SLASH_FLIPPER1", "SLASH_FLIPPER2", "SlashCmdList"}
 -- Test files reuse short names (r, price) from one case to the next.
 files["tests/"] = {ignore = {"431"}}
+-- The fake client defines the game's globals on purpose.
+files["tests/fake_wow.lua"] = {ignore = {"111", "112", "121", "122", "431"}}
