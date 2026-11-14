@@ -4,7 +4,7 @@
 ## Author: glholland
 ## Version: 0.1.0
 ## IconTexture: 133784
-## OptionalDeps: Auctionator
+## OptionalDeps: Auctionator, Questie, QuestieDB, Journalator, Journalator_Statistics, TradeSkillMaster
 ## SavedVariables: FlipperDB
 ## SavedVariablesPerCharacter: FlipperCharDB
 

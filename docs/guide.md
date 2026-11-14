@@ -104,36 +104,9 @@ Shift-clicking an item link anywhere while this tab is open jumps to that item.
 
 ## Tooltip
 
-Every item tooltip gets one Flipper line:
+Every item tooltip gets a Flipper verdict (keep, craft, disenchant, auction or vendor), the recipes your professions use the item in, and what those recipes lead to. Hold Shift before hovering for prices, vendors, sales estimates and every profession's recipes.
 
-- **Keep for Tailoring (3 known, 6 recipes):** your professions use it.
-- **Craft Silk Bag: 3s each:** a recipe you know beats selling it.
-- **Disenchant it:** you're an enchanter and the materials beat selling the item.
-- **Auction it / Vendor it:** nothing you craft needs it; this is the better sale.
-
-For gear, enchanters also see what it disenchants into and the enchants those materials are used in, known enchants first:
-
-```
-Flipper Vendor it
-  Disenchants into Small Glowing Shard
-  Enchanting: Enchant 2H Weapon - Minor Impact (1 Small Glowing Shard)
-  Enchanting 115: Enchant Shield - Lesser Protection (1 Small Glowing Shard)
-```
-
-Other characters see these lines with Shift held. Disenchant results follow the original-era tables, with Disenchantry's estimates for Forever's own rare items.
-
-Up to three recipes from your own professions follow. When a recipe turns the item into something other recipes use (ore into bars, cloth into bolts, leather into cured leather), the next step is listed under it, so you can see what the item is ultimately for:
-
-```
-Flipper Keep for Tailoring (1 known, 4 recipes)
-  Tailoring: Bolt of Linen Cloth x2 (known)  -> 23 recipes
-      Tailoring 50: Linen Bag (3)
-      Tailoring 70: Reinforced Linen Cape (2)
-```
-
-The next-step lines show your own professions; with Shift held they include every profession. Hold Shift before hovering to also see the price after the cut, where a vendor sells it, sales estimates and other professions' recipes.
-
-Recipe lines are green if you know the recipe or have the skill for it, red if your skill is too low, and grey for other professions. Recipes learned from trainers show no skill number.
+The [Tooltips guide](tooltips.md) explains every line, the colours, and what each line needs.
 
 `/flip tooltip` turns the tooltip lines off and on.
 
