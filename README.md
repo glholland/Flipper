@@ -1,60 +1,50 @@
 # Flipper
 
-A World of Warcraft: Forever addon that points at easy money:
+A World of Warcraft: Forever addon that shows where the gold is: underpriced auctions, vendor flips, what to do with each item in your bags, and which crafts and recipes pay.
 
-- **Flips:** auction house listings cheaper than what a vendor pays for them. Buy, then sell to any vendor.
-- **Bags:** the best use of every item you carry: vendor it, auction it, or craft it into something worth more (e.g. sell fish raw vs. cook them).
-- **Crafts:** profit per craft for every recipe your character knows, at current AH prices.
-- **Vendor:** things vendors sell that go for 20%+ more on the AH, with where to buy them. Click a row for a map pin to the vendor. Every merchant you open is remembered (exact prices, limited stock, location); with Questie installed, its database adds vendors you haven't visited.
-- **Recipes:** unlearned recipes on the AH that would make money, with the vendor price or "Drop".
-- **Tooltips:** AH value after the 5% cut, vendor price and the best use, on every item.
+![The Buy from vendor tab](docs/images/buy-from-vendor.png)
 
-- **Sales estimates:** the AH never says whether someone else's auction sold, so the **Full scan** button (Flips tab, `/flip market`) records every auction and compares it with your previous full scan: listings that could have run out of time count as expired, ones that vanished while a cheaper listing stayed up as cancelled, the rest as sold (the game doesn't name other sellers, so this goes by price). Scans must be 15 minutes to 12 hours apart to count. That fills the **Sold/day** columns and a "Market: ~x sold/day, y% of listings sell" tooltip line over a few days of AH visits (one full scan per 15 minutes). A seller who pulls the cheapest listing to repost it lower is counted as a sale, so treat it as an upper estimate. Your own exact sold/failed counts come from Journalator.
+Flipper only reads and advises. It never buys or posts; rows hand you over to Auctionator, where you confirm the purchase or the price yourself.
 
-Sale values use a *fair price*: the cheapest listing, unless it's more than twice Auctionator's 21-day average (one wishful seller), in which case the average.
+## What it does
 
-Prices come from Auctionator (or TSM if installed). Flipper never buys anything itself: clicking a flip opens Auctionator's shopping search, and you buy with its buttons.
+| Tab | Shows |
+|---|---|
+| **Deals** | Items listed at 70% or less of their usual price, with the profit from reselling at the average. |
+| **Sell to vendor** | Auctions cheaper than what a vendor pays for the item. |
+| **Buy from vendor** | Vendor goods that sell for 20%+ more on the AH, and where to buy them. |
+| **Bags** | The best use of each item you carry: auction, vendor, or craft. |
+| **Crafts** | Profit per craft for the recipes you know. |
+| **Recipes** | Recipes for sale that you don't know and that would pay for themselves. |
+| **History** | Price history for every item, plus estimated sales from full scans. |
 
-## Getting Started
+Item tooltips get a one-line verdict (keep, craft, auction or vendor) and the recipes your professions use the item in.
 
-1. At the auction house Flipper is a tab along the bottom, next to Auctionator's; anywhere else `/flip` opens it as a window.
-2. The addon folder `Flipper/` is linked into `_forever_\Interface\AddOns\Flipper`. Restart the game fully the first time (a `/reload` doesn't pick up new addon folders).
-2. Scan the AH once with Auctionator so Flipper has prices.
-3. Open each profession window once (Tailoring, Enchanting, Cooking...) so Flipper learns your recipes.
-4. Commands:
-   - `/flip` toggles the window
-   - `/flip scan` opens the Flips tab and scans (auction house must be open)
-   - `/flip bags`, `/flip crafts` open those tabs
-   - `/flip minprofit 50` ignores flips under 50 copper per item (default 10)
-   - `/flip tooltip` turns tooltip lines on/off
+## Requirements
 
-## Development
+- World of Warcraft: Forever.
+- [Auctionator](https://www.curseforge.com/wow/addons/auctionator) for prices and the AH tab. TSM prices are used instead if TSM is installed.
+- Optional: **Questie** (vendor locations for items you haven't seen at a vendor) and **Journalator** (your own sold/unsold counts in the tooltip).
 
-Pure pricing logic lives in `Flipper/Core/Logic.lua` and `Core/Money.lua` and is tested offline under Lua 5.1:
+## Install
 
-```bash
-pip install lupa
-python tests/run_tests.py --syntax
-```
+1. Download `Flipper-<version>.zip` from [Releases](https://github.com/glholland/Flipper/releases).
+2. Unzip it into `World of Warcraft/_forever_/Interface/AddOns`, so that `AddOns/Flipper/Flipper.toc` exists.
+3. Restart the game. A `/reload` does not pick up a new addon.
 
-Forever runs Blizzard's Mainline UI on the 12.1.5 API: use `C_Item`, `C_Container`, `C_TradeSkillUI`, `C_AuctionHouse`; the old item globals (`GetItemInfo`, `GetItemSpell`...) are gone. Blizzard's UI source for the client is the `forever` branch of [Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source/tree/forever).
+## First steps
 
-Plan: `docs/superpowers/plans/2026-11-13-flipper.md`. Third-party notices: `NOTICE`.
+1. Open the auction house and run an Auctionator scan, so there are prices to work with.
+2. Open each of your profession windows once. Flipper reads your recipes from them.
+3. Click the **Flipper** tab at the bottom of the auction house, or type `/flip` anywhere.
+4. Press **Full** on the Sell to vendor tab on most AH visits. Two full scans between 15 minutes and 12 hours apart start filling the Sold/day columns.
 
-## Development and releases
+## Documentation
 
-Every push and pull request runs the CI workflow (`.github/workflows/ci.yml`):
+- [User guide](docs/guide.md): every tab, the tooltip and the slash commands.
+- [Sales estimates](docs/sales-estimates.md): how Sold/day is worked out and how far to trust it.
+- [Data](docs/data.md): where prices, recipes and vendor information come from.
+- [Troubleshooting](docs/troubleshooting.md)
+- [Development](docs/development.md): layout, tests, CI and releases.
 
-- **Lint:** `luac5.1 -p` on every Lua file, then `luacheck` (`.luacheckrc`). Writing an undeclared global fails the build, because a leaked global is how an addon taints Blizzard's UI.
-- **Tests:** `python tests/run_tests.py --syntax` runs the pricing-logic tests under Lua 5.1 (needs `pip install lupa`).
-- **TOC:** `python tools/check_toc.py` checks that `Flipper.toc` and the files on disk agree.
-- **Package:** `python tools/package.py --version <v>` builds `dist/Flipper-<v>.zip`; CI attaches a dev build to each run.
-
-To release, tag the commit and push the tag. The Release workflow reruns the checks, builds the zip with that version in the TOC and publishes a GitHub release with generated notes. A tag with a hyphen (`v0.3.0-beta1`) is published as a pre-release.
-
-```
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-To install a release, unzip it into `World of Warcraft/_forever_/Interface/AddOns`.
+Third-party notices are in [NOTICE](NOTICE).
