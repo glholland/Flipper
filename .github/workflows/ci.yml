@@ -67,7 +67,7 @@ jobs:
           python-version: "3.12"
       - name: Build zip
         run: python tools/package.py --version "dev-${GITHUB_SHA::7}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Flipper-dev-${{ github.sha }}
           path: dist/*.zip
