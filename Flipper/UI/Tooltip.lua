@@ -69,10 +69,18 @@ local function sortedUses(itemID)
     return own, others, knownCount
 end
 
--- "Keep for Tailoring (3 known, 6 recipes)  -  AH 2s 40c", "Craft Silk Bag: 3s each", ...
+-- Auctionator already prints the vendor and auction price in the same tooltip; with it
+-- loaded Flipper says what to do and leaves the numbers to Auctionator.
+local function pricesShownElsewhere()
+    return Auctionator and Auctionator.API and Auctionator.API.v1 and true or false
+end
+
+-- "Keep for Tailoring (3 known, 6 recipes)", "Craft Silk Bag: 3s each", "Auction it", ...
 local function verdict(advice, own, knownCount)
+    local quiet = pricesShownElsewhere()
     local price
-    if advice.action == "ah" then price = "AH " .. Money.Format(advice.perUnit)
+    if quiet then price = advice.action == "ah" and "auction" or advice.action == "vendor" and "vendor" or nil
+    elseif advice.action == "ah" then price = "AH " .. Money.Format(advice.perUnit)
     elseif advice.action == "vendor" then price = "vendor " .. Money.Format(advice.perUnit) end
     if advice.action == "craft" then
         return "Craft " .. advice.craftName .. ": " .. Money.Format(advice.perUnit) .. " each"
@@ -86,8 +94,12 @@ local function verdict(advice, own, knownCount)
             or string.format("%d %s", #own, #own == 1 and "recipe" or "recipes")
         return "Keep for " .. table.concat(professions, ", ") .. " (" .. counts .. ")" .. (price and ("  -  or " .. price) or "")
     end
-    if advice.action == "ah" then return "Auction it: " .. Money.Format(advice.perUnit) .. " each after the cut" end
-    if advice.action == "vendor" then return "Vendor it: " .. Money.Format(advice.perUnit) .. " each" end
+    if advice.action == "ah" then
+        return quiet and "Auction it" or ("Auction it: " .. Money.Format(advice.perUnit) .. " each after the cut")
+    end
+    if advice.action == "vendor" then
+        return quiet and "Vendor it" or ("Vendor it: " .. Money.Format(advice.perUnit) .. " each")
+    end
 end
 
 local function useLine(tooltip, use)
@@ -104,7 +116,7 @@ local function addDetails(tooltip, itemID)
     local ah = ns.Logic.NetAH(ns.Prices.Fair(itemID), ns.AH_CUT)
     local vendor = ns.Prices.Vendor(itemID)
     if ah then parts[#parts + 1] = "AH after cut " .. Money.Format(ah) end
-    if vendor and vendor > 0 then parts[#parts + 1] = "vendor pays " .. Money.Format(vendor) end
+    if vendor and vendor > 0 and not pricesShownElsewhere() then parts[#parts + 1] = "vendor pays " .. Money.Format(vendor) end
     if #parts > 0 then tooltip:AddLine("  " .. table.concat(parts, ", "), unpack(GREY)) end
     local buy = ns.Vendors.BuyPrice(itemID)
     if buy then
@@ -131,7 +143,8 @@ local function addLines(tooltip, data)
     local advice = ns.Bags.Advice(itemID)
     local own, others, knownCount = sortedUses(itemID)
     local text = verdict(advice, own, knownCount)
-    if not text and #others == 0 then return end
+    -- Nothing to say: no line at all (other professions' uses still show with Shift).
+    if not text and not (IsShiftKeyDown() and #others > 0) then return end
     tooltip:AddLine(TAG .. (text or "No use for your professions"), 1, 1, 1)
     local shift = IsShiftKeyDown()
     if shift then addDetails(tooltip, itemID) end
@@ -144,8 +157,6 @@ local function addLines(tooltip, data)
     if hidden > 0 then
         tooltip:AddLine(string.format("  +%d more %s%s", hidden, hidden == 1 and "use" or "uses",
             shift and "" or " (hover with Shift held)"), unpack(GREY))
-    elseif not shift then
-        tooltip:AddLine("  Shift: prices and sales", unpack(GREY))
     end
 end
 
