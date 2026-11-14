@@ -1,19 +1,19 @@
 # Installing Flipper
 
-## Before you start
+## Install these first
 
-You need:
+Flipper doesn't collect prices or vendor locations itself; it reads them from other addons. Install these **before** Flipper, log in once, and run an Auctionator scan at the auction house. Flipper then has data to show from the first time you open it.
 
-- **World of Warcraft: Forever**, installed through Battle.net.
-- **Auctionator.** Flipper gets its prices from it and adds its AH tab through a library Auctionator ships. Without it, Flipper only works if TSM is installed, and has no AH tab.
+| Order | Addon | | What Flipper uses it for | Without it |
+|---|---|---|---|---|
+| 1 | [Auctionator](https://www.curseforge.com/wow/addons/auctionator) | **Required** | Every price; price history; the Flipper tab in the AH; full scans shared with Auctionator's; buying and posting through its Shopping and Selling tabs | No Deals, no flips, no profits, no tooltip verdicts, no AH tab. Flipper only lists recipes. |
+| 2 | [Questie](https://www.curseforge.com/wow/addons/questie) | Strongly recommended | Which NPCs sell an item, and where they stand | Buy from vendor only knows vendors you've opened yourself; fewer map pins. |
+| 3 | [Journalator](https://www.curseforge.com/wow/addons/journalator) | Recommended | Your own sold and unsold counts | No "You: N sold" line in tooltips. |
+| - | TradeSkillMaster | Optional | Prices, used instead of Auctionator's when present | Nothing; Auctionator covers it. |
 
-Optional:
+Get the versions made for WoW Forever (the Forever client uses its own addon builds; on CurseForge, check the game version). Then install Flipper.
 
-| Addon | Adds |
-|---|---|
-| Questie | Vendor names and map positions for items you haven't bought yet |
-| Journalator | Your own sold and unsold counts in the tooltip |
-| TSM | Used for prices instead of Auctionator when present |
+You also need **World of Warcraft: Forever**, installed through Battle.net.
 
 ## Find your AddOns folder
 
@@ -47,7 +47,7 @@ On a default install that is `C:\Program Files (x86)\World of Warcraft\_forever_
 
 1. Log in and type `/flip`. The Flipper window should open.
 2. Open the auction house. A **Flipper** tab appears along the bottom, next to Auctionator's tabs.
-3. Hover any item. The tooltip should have a green "Flipper" line once Auctionator has prices.
+3. Hover something in your bags. The tooltip should have a green "Flipper" line, for example "Auction it" or "Keep for Tailoring". If it never appears, Auctionator has no prices yet: run its scan. See [Tooltips](tooltips.md).
 
 Then follow [First steps](../README.md#first-steps) to give Flipper prices and recipes to work with.
 
