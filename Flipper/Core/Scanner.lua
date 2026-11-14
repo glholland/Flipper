@@ -231,7 +231,8 @@ function Scanner.InstallHooks()
         if C_AuctionHouse[name] then
             hooksecurefunc(C_AuctionHouse, name, function()
                 if Scanner.ownQuery then return end
-                Scanner.lastForeignSearch = GetTime()
+                -- The AH lists favorites by itself when it opens; that isn't you searching.
+                if name ~= "SearchForFavorites" then Scanner.lastForeignSearch = GetTime() end
                 if Scanner.running and Scanner.state == "browse" and not Scanner.passive then
                     Scanner.Stop("interrupted")
                 end
