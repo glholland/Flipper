@@ -11,6 +11,7 @@
 Core\Init.lua
 Data\RecipeDB.lua
 Data\BuyPriceDB.lua
+Data\CraftDB.lua
 Core\Money.lua
 Core\Logic.lua
 Core\Compat.lua

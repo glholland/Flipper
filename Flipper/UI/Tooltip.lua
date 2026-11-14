@@ -50,35 +50,34 @@ local function addSalesLines(tooltip, data)
     end
 end
 
--- "Tailoring 125: Silk Bag x3" for every recipe Flipper knows of that takes this item.
--- Your own professions come first; green means you have the skill for it.
+-- "Tailoring 125: Silk Bag x3" for every recipe that takes this item, from Data/CraftDB.lua
+-- (all of Blizzard's Forever recipes, trainer-taught ones and enchants included).
+-- Your own professions come first. Green: you know it, or have the skill its recipe item
+-- asks for. Red: your profession, but not enough skill. Grey: someone else's profession.
+-- Trainer recipes have no skill level in Blizzard's data, so they show none.
 local USED_IN_SHOWN, USED_IN_SHIFT = 5, 20
 local usedIn
 local function recipesUsing(itemID)
     if not usedIn then
         usedIn = {}
-        for _, entry in pairs(ns.RecipeDB or {}) do
-            local flat = entry[7] or {}
+        for _, entry in ipairs(ns.CraftDB or {}) do
+            local flat = entry[5] or {}
             for i = 1, #flat - 1, 2 do
                 local list = usedIn[flat[i]] or {}
                 usedIn[flat[i]] = list
-                list[#list + 1] = {profession = entry[1], skill = entry[2] or 0, name = entry[3], qty = flat[i + 1]}
+                list[#list + 1] = {profession = entry[1], name = entry[2], skill = entry[3] or 0, qty = flat[i + 1]}
             end
         end
     end
-    -- The shipped data only has recipes taught by an item (patterns, plans...). Recipes you
-    -- learned from a trainer come from your own profession windows.
-    local uses, have = {}, {}
-    for _, use in ipairs(usedIn[itemID] or {}) do uses[#uses + 1] = use; have[use.name:lower()] = true end
-    for _, recipe in ipairs(ns.Recipes.UsingReagent(itemID)) do
-        if recipe.name and not have[recipe.name:lower()] then
-            have[recipe.name:lower()] = true
-            local qty = 0
-            for _, reagent in ipairs(recipe.reagents) do if reagent[1] == itemID then qty = qty + reagent[2] end end
-            uses[#uses + 1] = {profession = recipe.profession or "?", skill = 0, name = recipe.name, qty = qty, known = true}
-        end
+    return usedIn[itemID]
+end
+
+local function knownRecipeNames()
+    local known = {}
+    for _, recipe in ns.Recipes.All() do
+        if recipe.name then known[recipe.name:lower()] = true end
     end
-    return #uses > 0 and uses or nil
+    return known
 end
 
 local function addUsedInLines(tooltip, data)
@@ -93,15 +92,19 @@ local function addUsedInLines(tooltip, data)
         if a.skill ~= b.skill then return a.skill < b.skill end
         return a.name < b.name
     end)
+    local known = knownRecipeNames()
     local limit = IsShiftKeyDown() and USED_IN_SHIFT or USED_IN_SHOWN
     tooltip:AddLine("|cff4ade80Flipper|r Used in " .. #uses .. (#uses == 1 and " recipe" or " recipes"), 1, 1, 1)
     for i = 1, math.min(#uses, limit) do
         local use = uses[i]
         local skill = mine[use.profession]
+        local isKnown = known[use.name:lower()]
         local r, g, b = 0.6, 0.6, 0.6
-        if skill and skill >= use.skill then r, g, b = 0.29, 0.87, 0.5 elseif skill then r, g, b = 0.97, 0.44, 0.44 end
-        local level = use.known and "(known)" or tostring(use.skill)
-        tooltip:AddLine(string.format("  %s %s: %s x%d", use.profession, level, use.name, use.qty), r, g, b)
+        if isKnown or (skill and use.skill > 0 and skill >= use.skill) then r, g, b = 0.29, 0.87, 0.5
+        elseif skill and use.skill > skill then r, g, b = 0.97, 0.44, 0.44
+        elseif skill then r, g, b = 1, 1, 1 end
+        local label = use.profession .. (use.skill > 0 and (" " .. use.skill) or "")
+        tooltip:AddLine(string.format("  %s: %s x%d%s", label, use.name, use.qty, isKnown and " (known)" or ""), r, g, b)
     end
     if #uses > limit then
         tooltip:AddLine(string.format("  +%d more%s", #uses - limit, IsShiftKeyDown() and "" or " (hold Shift)"), 0.6, 0.6, 0.6)
