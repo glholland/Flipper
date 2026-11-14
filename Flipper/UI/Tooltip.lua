@@ -1,7 +1,9 @@
 -- Adds Flipper's verdict to item tooltips. Mainline tooltips go through TooltipDataProcessor.
--- Normally: one verdict line (keep / craft / auction / vendor, with the reason) and the
--- recipes your own professions use the item in. Hold Shift while hovering for the rest:
--- prices, where a vendor sells it, sales estimates and every recipe that uses it.
+-- Normally: one verdict line (keep / craft / disenchant / auction / vendor, with the reason)
+-- and the recipes your own professions use the item in. When a recipe turns it into
+-- something other recipes use (ore into bars, cloth into bolts), the next step is shown
+-- under it. Hold Shift while hovering for the rest: prices, where a vendor sells it, sales
+-- estimates and every recipe that uses it.
 local _, ns = ...
 local Tooltip = {}
 ns.Tooltip = Tooltip
@@ -10,6 +12,7 @@ local Money = ns.Money
 local TAG = "|cff4ade80Flipper|r "
 local GREY = {0.6, 0.6, 0.6}
 local OWN_USES_SHOWN, ALL_USES_SHOWN = 3, 20
+local NEXT_SHOWN, NEXT_SHOWN_SHIFT = 2, 4     -- next-step recipes under each intermediate
 
 -- Recipes that take an item, from Data/CraftDB.lua (all of Blizzard's Forever recipes,
 -- trainer-taught ones and enchants included). Trainer recipes have no skill level in
@@ -23,7 +26,8 @@ local function recipesUsing(itemID)
             for i = 1, #flat - 1, 2 do
                 local list = usedIn[flat[i]] or {}
                 usedIn[flat[i]] = list
-                list[#list + 1] = {profession = entry[1], name = entry[2], skill = entry[3] or 0, qty = flat[i + 1]}
+                list[#list + 1] = {profession = entry[1], name = entry[2], skill = entry[3] or 0, qty = flat[i + 1],
+                    output = entry[4] or 0}
             end
         end
     end
@@ -105,13 +109,59 @@ local function verdict(advice, own, knownCount)
     end
 end
 
-local function useLine(tooltip, use)
-    local r, g, b = unpack(GREY)
-    if use.reach then r, g, b = 0.29, 0.87, 0.5
-    elseif use.tooHard then r, g, b = 0.97, 0.44, 0.44
-    elseif use.reach ~= nil then r, g, b = 1, 1, 1 end
-    local label = use.profession .. (use.skill > 0 and (" " .. use.skill) or "")
-    tooltip:AddLine(string.format("  %s: %s x%d%s", label, use.name, use.qty, use.known and " (known)" or ""), r, g, b)
+local function useColor(use)
+    if use.reach then return 0.29, 0.87, 0.5 end
+    if use.tooHard then return 0.97, 0.44, 0.44 end
+    if use.reach ~= nil then return 1, 1, 1 end
+    return unpack(GREY)
+end
+
+local function useLabel(use)
+    return use.profession .. (use.skill > 0 and (" " .. use.skill) or "")
+end
+
+-- Recipes that take `output` (the next step after an intermediate craft), as marked copies:
+-- known first, then your professions, then by skill. `ownOnly` drops other professions.
+local function nextSteps(output, ownOnly)
+    local mine = FlipperCharDB and FlipperCharDB.professions or {}
+    local known = knownRecipeNames()
+    local steps = {}
+    for _, use in ipairs(recipesUsing(output)) do
+        local skill = mine[use.profession]
+        if skill or not ownOnly then
+            local step = {profession = use.profession, name = use.name, skill = use.skill, qty = use.qty}
+            if skill then
+                step.known = known[use.name:lower()] or false
+                step.reach = step.known or (use.skill > 0 and skill >= use.skill)
+                step.tooHard = use.skill > skill
+            end
+            steps[#steps + 1] = step
+        end
+    end
+    table.sort(steps, function(a, b)
+        if (a.known or false) ~= (b.known or false) then return a.known or false end
+        if (a.reach ~= nil) ~= (b.reach ~= nil) then return a.reach ~= nil end
+        if a.skill ~= b.skill then return a.skill < b.skill end
+        return a.name < b.name
+    end)
+    return steps
+end
+
+-- One use of the item, then (if its output feeds other recipes) the next step under it:
+--   Tailoring: Bolt of Linen Cloth x2  -> 23 recipes
+--     Tailoring 50: Linen Bag (3)
+local function useLine(tooltip, use, shift)
+    local following = use.output and use.output > 0 and #recipesUsing(use.output) or 0
+    local suffix = following > 0 and string.format("  |cff9ca3af-> %d %s|r", following, following == 1 and "recipe" or "recipes") or ""
+    tooltip:AddLine(string.format("  %s: %s x%d%s%s", useLabel(use), use.name, use.qty,
+        use.known and " (known)" or "", suffix), useColor(use))
+    if following == 0 then return end
+    local steps = nextSteps(use.output, not shift)
+    for i = 1, math.min(#steps, shift and NEXT_SHOWN_SHIFT or NEXT_SHOWN) do
+        local step = steps[i]
+        tooltip:AddLine(string.format("      %s: %s (%d)%s", useLabel(step), step.name, step.qty,
+            step.known and " (known)" or ""), useColor(step))
+    end
 end
 
 local function addDetails(tooltip, itemID)
@@ -212,9 +262,9 @@ local function addLines(tooltip, data)
     if outcomes then addDisenchantLines(tooltip, outcomes, shift) end
     if shift then addDetails(tooltip, itemID) end
     local shown = 0
-    for i = 1, math.min(#own, shift and ALL_USES_SHOWN or OWN_USES_SHOWN) do useLine(tooltip, own[i]); shown = shown + 1 end
+    for i = 1, math.min(#own, shift and ALL_USES_SHOWN or OWN_USES_SHOWN) do useLine(tooltip, own[i], shift); shown = shown + 1 end
     if shift then
-        for i = 1, math.min(#others, ALL_USES_SHOWN - shown) do useLine(tooltip, others[i]); shown = shown + 1 end
+        for i = 1, math.min(#others, ALL_USES_SHOWN - shown) do useLine(tooltip, others[i], shift); shown = shown + 1 end
     end
     local hidden = #own + #others - shown
     if hidden > 0 then
