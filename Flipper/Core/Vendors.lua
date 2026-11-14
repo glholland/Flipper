@@ -12,6 +12,7 @@ ns.Vendors = Vendors
 
 local MIN_MARGIN = 0.2           -- vendor flips must clear 20% of the vendor price after the AH cut
 local MAX_SELLERS = 3
+local MIN_DAYS_SEEN = 3          -- days of AH price history before a vendor flip is trusted
 
 local function memory()
     if not FlipperDB then return {items = {}, npcs = {}} end
@@ -236,7 +237,8 @@ function Vendors.FlipRows()
     local rows, missingInfo = {}, false
     for _, itemID in ipairs(candidates()) do
         local fair = ns.Prices.Fair(itemID)
-        if fair then
+        -- One or two sightings is somebody's hopeful listing, not a market to sell into.
+        if fair and ns.Prices.DaysSeen(itemID) >= MIN_DAYS_SEEN then
             local buy, source, limited = Vendors.BuyPrice(itemID)
             local profit = ns.Logic.VendorFlip(buy, fair, ns.AH_CUT, minProfit, MIN_MARGIN)
             if profit then

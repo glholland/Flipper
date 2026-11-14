@@ -55,9 +55,19 @@ end
 -- Reagents without a price are listed in `missing` and make profit nil.
 -- `sellFn` prices the output (defaults to priceFn); pass Prices.Fair to value what you sell
 -- at a realistic price while buying reagents at today's price.
-function Logic.CraftMargin(recipe, priceFn, cut, sellFn)
+-- `vendorFn` (optional) is what a vendor pays for the output: when that beats the AH after
+-- the cut, the craft is valued at the vendor price and result.sellTo is "vendor".
+local function outputValue(recipe, priceFn, cut, sellFn, vendorFn)
+    local ah = Logic.NetAH((sellFn or priceFn)(recipe.output), cut)
+    local vendor = vendorFn and num(vendorFn(recipe.output))
+    if vendor and vendor > 0 and (not ah or vendor >= ah) then return vendor, "vendor" end
+    return ah, ah and "ah" or nil
+end
+
+function Logic.CraftMargin(recipe, priceFn, cut, sellFn, vendorFn)
     local result = {missing = {}}
-    local outputPrice = Logic.NetAH((sellFn or priceFn)(recipe.output), cut)
+    local outputPrice
+    outputPrice, result.sellTo = outputValue(recipe, priceFn, cut, sellFn, vendorFn)
     result.value = outputPrice and math.floor(outputPrice * averageQuantity(recipe)) or nil
     local cost = 0
     for _, reagent in ipairs(recipe.reagents or {}) do
@@ -72,8 +82,8 @@ end
 
 -- What one unit of `reagentID` is worth when turned into this recipe's output:
 -- (craft value - cost of the other reagents) / how many of it the craft uses.
-function Logic.ReagentValue(recipe, reagentID, priceFn, cut, sellFn)
-    local outputPrice = Logic.NetAH((sellFn or priceFn)(recipe.output), cut)
+function Logic.ReagentValue(recipe, reagentID, priceFn, cut, sellFn, vendorFn)
+    local outputPrice = outputValue(recipe, priceFn, cut, sellFn, vendorFn)
     if not outputPrice then return nil end
     local used, others = 0, 0
     for _, reagent in ipairs(recipe.reagents or {}) do
@@ -109,43 +119,65 @@ end
 ------------------------------------------------------------------------
 -- Sales estimates from two full AH snapshots
 ------------------------------------------------------------------------
--- snapshot[itemID][seller][unitPrice] = {q = quantity, tl = shortest time-left band}
--- Bands (Enum.AuctionHouseTimeLeftBand): 0 <30m, 1 <2h, 2 <12h, 3 <48h.
-Logic.BAND_MAX_SECONDS = {[0] = 1800, [1] = 7200, [2] = 43200, [3] = 172800}
+-- snapshot[itemID][unitPrice] = {q = quantity, tl = shortest time-left band}
+-- Bands (Enum.AuctionHouseTimeLeftBand): 0 <30m, 1 30m-2h, 2 2h-12h, 3 12h-48h.
+-- The client doesn't name other sellers, so listings are compared by item and price only.
+Logic.BAND_MIN_SECONDS = {[0] = 0, [1] = 1800, [2] = 7200, [3] = 43200}
 
 -- What happened to listings missing from `now`, `elapsed` seconds after `prev`:
 -- {[itemID] = {sold, expired, cancelled}}. Rules, most cautious first:
---  * could have run out of time (elapsed >= its band's maximum) -> expired
---  * the same seller listed new quantity of the item at another price -> cancelled (relisted)
---  * otherwise -> sold (a seller cancelling and walking away also lands here)
+--  * it could have run out of time (elapsed >= the least time its band had left) -> expired
+--  * a cheaper listing from `prev` is still up -> cancelled: buyers take the cheapest
+--    first, so a dearer one that vanished was pulled (usually to relist lower)
+--  * otherwise -> sold. A seller who pulls the cheapest listing to repost it even lower
+--    also lands here, so read "sold" as an upper estimate.
 function Logic.CompareSnapshots(prev, now, elapsed)
     local result = {}
-    for itemID, sellers in pairs(prev) do
-        for seller, prices in pairs(sellers) do
-            local current = now[itemID] and now[itemID][seller] or {}
-            local relisted = 0
-            for price, entry in pairs(current) do
-                local before = prices[price] and prices[price].q or 0
-                if entry.q > before then relisted = relisted + entry.q - before end
-            end
-            for price, entry in pairs(prices) do
-                local gone = entry.q - (current[price] and current[price].q or 0)
-                if gone > 0 then
-                    local r = result[itemID] or {sold = 0, expired = 0, cancelled = 0}
-                    result[itemID] = r
-                    if elapsed >= (Logic.BAND_MAX_SECONDS[entry.tl] or 0) then
-                        r.expired = r.expired + gone
-                    else
-                        local cancelled = math.min(gone, relisted)
-                        relisted = relisted - cancelled
-                        r.cancelled = r.cancelled + cancelled
-                        r.sold = r.sold + gone - cancelled
-                    end
+    for itemID, prices in pairs(prev) do
+        local current = now[itemID] or {}
+        -- Cheapest earlier price that still has stock.
+        local floor
+        for price in pairs(prices) do
+            if current[price] and current[price].q > 0 and (not floor or price < floor) then floor = price end
+        end
+        for price, entry in pairs(prices) do
+            local gone = entry.q - (current[price] and current[price].q or 0)
+            if gone > 0 then
+                local r = result[itemID] or {sold = 0, expired = 0, cancelled = 0}
+                result[itemID] = r
+                if elapsed >= (Logic.BAND_MIN_SECONDS[entry.tl] or 0) then
+                    r.expired = r.expired + gone
+                elseif floor and price > floor then
+                    r.cancelled = r.cancelled + gone
+                else
+                    r.sold = r.sold + gone
                 end
             end
         end
     end
     return result
+end
+
+-- Merges an older snapshot[itemID][seller][unitPrice] into the seller-free shape.
+function Logic.FlattenSnapshot(snapshot)
+    local flat = {}
+    local function merge(prices, price, entry)
+        local have = prices[price]
+        if have then have.q, have.tl = have.q + entry.q, math.min(have.tl, entry.tl)
+        else prices[price] = {q = entry.q, tl = entry.tl} end
+    end
+    for itemID, inner in pairs(snapshot or {}) do
+        local prices = {}
+        flat[itemID] = prices
+        for key, value in pairs(inner) do
+            if type(key) == "string" then
+                for price, entry in pairs(value) do merge(prices, price, entry) end
+            else
+                merge(prices, key, value)
+            end
+        end
+    end
+    return flat
 end
 
 -- Folds one comparison into rolling per-day stats:

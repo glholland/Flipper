@@ -20,6 +20,7 @@ Core\Bags.lua
 Core\Scanner.lua
 Core\Market.lua
 Core\History.lua
+Core\Deals.lua
 Core\Vendors.lua
 Core\RecipeShop.lua
 UI\Window.lua

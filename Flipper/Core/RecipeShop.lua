@@ -72,6 +72,9 @@ function Shop.Rows()
     return cachedRows
 end
 
+-- Vendor value of a craft's output, from cached item info only (1,600 recipes are priced).
+local function cachedVendor(itemID) return ns.Prices.Vendor(itemID, true) end
+
 function Shop.BuildRows()
     local professions = Shop.Professions()
     local known, scanned = knownNames()
@@ -84,7 +87,7 @@ function Shop.BuildRows()
         if shown and not known[recipe.name:lower()] then
             local price = ns.Prices.AH(itemID)
             if price then
-                local margin = ns.Logic.CraftMargin(recipe, ns.Prices.AH, ns.AH_CUT, ns.Prices.Fair)
+                local margin = ns.Logic.CraftMargin(recipe, ns.Prices.Buy, ns.AH_CUT, ns.Prices.Fair, cachedVendor)
                 -- The recipe item's own name ("Pattern: ...") is needed to buy it; rows wait
                 -- until its info loads (GET_ITEM_INFO_RECEIVED refreshes the window).
                 local name, _, quality, icon  -- local _: assigning the global one taints Blizzard code

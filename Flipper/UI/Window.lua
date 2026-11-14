@@ -9,8 +9,8 @@ local ROW_HEIGHT, HEADER_Y, TOP_ROWS_Y = 22, -56, -74
 local VALUE_WIDTH, ICON_SPACE, PAD = 92, 34, 12
 local MIN_W, MIN_H, MAX_W, MAX_H = 680, 260, 1400, 1000
 local DEFAULT_W, DEFAULT_H = 760, 440
-local TAB_ORDER = {"flips", "vendor", "bags", "crafts", "recipes", "history"}
-local TAB_LABEL = {flips = "AH flips", vendor = "Vendor", bags = "Bags", crafts = "Crafts", recipes = "Recipes",
+local TAB_ORDER = {"deals", "flips", "vendor", "bags", "crafts", "recipes", "history"}
+local TAB_LABEL = {deals = "Deals", flips = "Sell to vendor", vendor = "Buy from vendor", bags = "Bags", crafts = "Crafts", recipes = "Recipes",
     history = "History"}
 
 local ACTION_TEXT = {ah = "|cff60a5faAuction|r", vendor = "Vendor", craft = "|cff4ade80Craft|r", none = "|cff9ca3af-|r"}
@@ -65,8 +65,9 @@ local TABS = {
             return #r.margin.missing > 0 and GREY_NO_PRICE or Money.Format(r.margin.cost)
         end},
         {"Value", function(r) return r.margin.value end, function(r)
-            return r.margin.value and Money.Format(r.margin.value) or GREY_NO_PRICE
-        end},
+            if not r.margin.value then return GREY_NO_PRICE end
+            return Money.Format(r.margin.value) .. (r.margin.sellTo == "vendor" and " |cff9ca3af(vendor)|r" or "")
+        end, 130},
         {"Profit", function(r) return r.margin.profit end, function(r) return signed(r.margin.profit) end},
     },
     vendor = {
@@ -110,6 +111,17 @@ local function percent(change)
     return "0%"
 end
 
+-- Deals: listed well below the usual price. Profit assumes reselling at the average.
+TABS.deals = {
+    default = {4, true},
+    {"Item", function(r) return r.name end, function(r) return qualityName(r) end},
+    {"Now", function(r) return r.latest end, function(r) return Money.Format(r.latest) end},
+    {"Usual", function(r) return r.average end, function(r) return Money.Format(r.average) end},
+    {"Profit/ea", function(r) return r.profit end, function(r) return green(Money.Format(r.profit)) end},
+    {"vs usual", function(r) return r.change end, function(r) return percent(r.change) end, 64},
+    {"Days seen", function(r) return r.daysTracked end, function(r) return count(r.daysTracked) end, 70},
+    {"Sold/day", function(r) return r.perDay end, function(r) return ns.Market.FormatRate(r.perDay) end, 70},
+}
 TABS.history = {
     sortKey = "history:v2",
     default = {6, false},
@@ -134,7 +146,7 @@ TABS.historyItem = {
     {"Listed", function(r) return r.listed end, function(r) return count(r.listed) end, 60},
     {"Sold", function(r) return r.sold end, function(r) return r.sold and green(r.sold) or count(nil) end, 56},
     {"Expired", function(r) return r.expired end, function(r) return count(r.expired) end, 60},
-    {"Relisted", function(r) return r.cancelled end, function(r) return count(r.cancelled) end, 64},
+    {"Cancelled", function(r) return r.cancelled end, function(r) return count(r.cancelled) end, 64},
 }
 
 function Window.Spec()
@@ -153,7 +165,8 @@ local MAX_COLUMNS = 7
 local LEFT_ALIGNED = {["Best use"] = true, ["Where to buy"] = true}
 -- Shown in the middle of an empty list.
 local EMPTY = {
-    flips = "No AH flips yet.\nWith the auction house open, press Scan to find listings\ncheaper than what a vendor pays for them.",
+    deals = "No deals right now.\nDeals are items listed at 70% or less of their usual price.\nScan the AH with Auctionator for fresh prices.",
+    flips = "Nothing to sell to a vendor yet.\nWith the auction house open, press Scan to find listings\ncheaper than what a vendor pays for them.",
     vendor = "No vendor flips found.\nOpen vendors as you travel (Flipper remembers their stock),\nor install Questie to know every vendor.",
     bags = "Your bags are empty, or item info is still loading.",
     crafts = "No recipes known yet.\nOpen each profession window once so Flipper can learn your recipes.",
@@ -170,7 +183,7 @@ local function craftRows()
     for _, recipe in ns.Recipes.All() do
         local name, _, quality, icon = ns.Compat.ItemInfo(recipe.output)
         rows[#rows + 1] = {name = recipe.name or name or "?", quality = quality, icon = icon,
-            itemID = recipe.output, margin = ns.Logic.CraftMargin(recipe, ns.Prices.AH, ns.AH_CUT, ns.Prices.Fair)}
+            itemID = recipe.output, margin = ns.Logic.CraftMargin(recipe, ns.Prices.Buy, ns.AH_CUT, ns.Prices.Fair, ns.Prices.Vendor)}
     end
     return rows
 end
@@ -192,7 +205,8 @@ end
 
 function Window.Data()
     local rows
-    if Window.tab == "flips" then
+    if Window.tab == "deals" then rows = ns.Deals.Rows()
+    elseif Window.tab == "flips" then
         rows = {}
         for i, row in ipairs(ns.Scanner.rows) do rows[i] = row end  -- don't reorder the scanner's own list
     elseif Window.tab == "vendor" then
@@ -451,7 +465,7 @@ function Window.CreateRow(parent, index)
             GameTooltip:AddLine("Click: map pin to the vendor. Shift-click: check the AH in Auctionator.", 0.3, 0.9, 0.5, true)
         elseif Window.tab == "recipes" and sellers then
             GameTooltip:AddLine("Click: open in Auctionator. Shift-click: map pin to the vendor.", 0.3, 0.9, 0.5, true)
-        elseif Window.tab == "flips" or Window.tab == "recipes" then
+        elseif Window.tab == "flips" or Window.tab == "recipes" or Window.tab == "deals" then
             GameTooltip:AddLine("Click: open in Auctionator to buy", 0.3, 0.9, 0.5)
         end
         if Window.tab == "history" then
@@ -473,7 +487,8 @@ function Window.CreateRow(parent, index)
         if Window.tab == "vendor" or Window.tab == "recipes" then
             if pin and data.sellers and data.sellers[1] then ns.Vendors.Waypoint(data.sellers[1]); return end
         end
-        if Window.tab == "flips" or Window.tab == "recipes" or Window.tab == "vendor" then
+        if (Window.tab == "flips" or Window.tab == "recipes" or Window.tab == "vendor" or Window.tab == "deals")
+            and not data.needsInfo then
             ns.Scanner.OpenInAuctionator(data)
         end
     end)
@@ -629,7 +644,7 @@ function Window.Create()
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:AddLine("Full scan: estimate sales")
         GameTooltip:AddLine("Records every auction. Each later full scan compares against it to estimate how many sold, "
-            .. "expired or were relisted. Run one every AH visit; the Sold/day columns fill in over a few days. "
+            .. "expired or were cancelled. Scans 15 minutes to 12 hours apart count; closer together is more accurate. "
             .. "Limited to one every 15 minutes; may freeze the game for a moment.", 0.8, 0.8, 0.8, true)
         GameTooltip:Show()
     end)

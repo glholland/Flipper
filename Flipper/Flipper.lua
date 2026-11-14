@@ -10,6 +10,7 @@ function events.ADDON_LOADED(name)
     FlipperDB = ns.ApplyDefaults(FlipperDB, ns.DEFAULTS)
     FlipperCharDB = ns.ApplyDefaults(FlipperCharDB, ns.CHAR_DEFAULTS)
     ns.Recipes.Migrate()
+    ns.Market.Migrate()
     ns.Scanner.OnChanged = refresh
     ns.Market.OnChanged = refresh
     ns.Tooltip.Install()

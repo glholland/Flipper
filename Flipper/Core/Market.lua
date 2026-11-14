@@ -1,29 +1,34 @@
 -- How fast things sell.
 --  * Market (everyone): full AH scans (C_AuctionHouse.ReplicateItems) are compared with the
---    previous one. Listings that vanish are classed as expired, cancelled-and-relisted, or
---    sold (Logic.CompareSnapshots). The AH never reports other people's sales, so "sold" is
---    an estimate: a seller who cancels without relisting is counted as a sale.
+--    previous one. Listings that vanish are classed as expired, cancelled or sold
+--    (Logic.CompareSnapshots). The AH never reports other people's sales or names other
+--    sellers, so "sold" is an estimate: the cheapest listings that vanish before they could
+--    have expired.
 --  * You: Journalator's statistics (if installed) count your own sales and failed auctions.
 local _, ns = ...
 local Market = {state = "idle"}
 ns.Market = Market
 
 local COOLDOWN = 15 * 60        -- Blizzard limits full scans; retail is 15 minutes
-local MAX_GAP = 48 * 3600       -- older snapshots can't tell sold from expired
+local MAX_GAP = 12 * 3600       -- after 12h every listing could have expired: nothing to learn
 local WINDOW_DAYS = 14
 local LOAD_WAIT = 8             -- seconds to wait for seller names to load
 
--- Stats day numbers switched to Auctionator's (see ns.Day); version 1 data used UTC days.
-local STATS_VERSION = 2
+-- Version 2: Auctionator's day numbers. Version 3: sales are judged by price, not by
+-- seller (the client never names other sellers), so older stats are discarded.
+local STATS_VERSION = 3
 
 local function db()
     FlipperDB.market = FlipperDB.market or {stats = {}}
     local store = FlipperDB.market
     if store.version ~= STATS_VERSION then
         store.stats, store.version = {}, STATS_VERSION
+        if store.snapshot then store.snapshot = ns.Logic.FlattenSnapshot(store.snapshot) end
     end
     return store
 end
+
+function Market.Migrate() db() end
 
 local function today() return ns.Day() end
 Market.WINDOW_DAYS = WINDOW_DAYS
@@ -60,17 +65,14 @@ end
 local function readSnapshot(acceptPartial)
     local snapshot, pending = {}, 0
     for index = 0, C_AuctionHouse.GetNumReplicateItems() - 1 do
-        local _, _, count, _, _, _, _, _, _, buyout, _, _, _, owner, _, _, itemID, hasAllInfo =
+        local _, _, count, _, _, _, _, _, _, buyout, _, _, _, _, _, _, itemID, hasAllInfo =
             C_AuctionHouse.GetReplicateItemInfo(index)
         if not hasAllInfo then pending = pending + 1 end
         if ns.IsNumber(itemID) and ns.IsNumber(count) and count > 0 and ns.IsNumber(buyout) and buyout > 0 then
-            local seller = (type(owner) == "string" and owner ~= "") and owner or "?"
             local band = C_AuctionHouse.GetReplicateItemTimeLeft and C_AuctionHouse.GetReplicateItemTimeLeft(index) or 3
             local unit = math.floor(buyout / count)
-            local sellers = snapshot[itemID] or {}
-            snapshot[itemID] = sellers
-            local prices = sellers[seller] or {}
-            sellers[seller] = prices
+            local prices = snapshot[itemID] or {}
+            snapshot[itemID] = prices
             local entry = prices[unit]
             if entry then
                 entry.q = entry.q + count
@@ -97,7 +99,7 @@ local function finish(snapshot)
         Market.lastResult = result
         ns.Print(string.format("full scan done: %d items listed, compared with %d min ago.", auctions, math.floor(elapsed / 60)))
     else
-        ns.Print(string.format("full scan done: %d items listed. Scan again on a later AH visit to start estimating sales.", auctions))
+        ns.Print(string.format("full scan done: %d items listed. Scan again in 15 minutes to 12 hours to estimate sales.", auctions))
     end
     store.snapshot, store.snapshotAt = snapshot, now
     -- Forget days outside the window.
@@ -125,7 +127,8 @@ end
 
 function Market.Tick()
     if Market.state == "replicating" and GetTime() > Market.deadline then
-        Market.state = "timeout"; changed()
+        -- No answer means no scan happened: don't hold the next try to the cooldown.
+        Market.state = "timeout"; db().lastScan = nil; changed()
     elseif Market.state == "reading" then
         if Market.nextRead and GetTime() < Market.nextRead then return end
         Market.nextRead = GetTime() + 1
@@ -148,7 +151,7 @@ end
 -- Estimated units sold per day, sell-through (0-1) and hours observed, or nil.
 function Market.Rate(itemID)
     local store = FlipperDB and FlipperDB.market
-    if not store or not ns.IsNumber(itemID) then return nil end
+    if not store or store.version ~= STATS_VERSION or not ns.IsNumber(itemID) then return nil end
     local perDay, through, observed = ns.Logic.SalesRate(store.stats, itemID, today(), WINDOW_DAYS)
     return perDay, through, observed and observed / 3600
 end

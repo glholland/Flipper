@@ -93,26 +93,40 @@ eq("vendor flip no AH price", Logic.VendorFlip(100, nil, 0.05, 10, 0.2), nil)
 local fair = function(id) return id == 10 and 800 or price(id) end
 eq("craft sells at fair price", Logic.CraftMargin(bag, price, 0.05, fair).value, 1520)  -- 2 * 760
 
--- CompareSnapshots
-local function snap(item, seller, price, q, tl) return {[item] = {[seller] = {[price] = {q = q, tl = tl}}}} end
-local r1 = Logic.CompareSnapshots(snap(1, "A", 100, 5, 3), {}, 600)
+-- CraftMargin: output worth more at a vendor than on the AH after the cut
+local vend = function(id) return id == 10 and 900 or 0 end
+local mv = Logic.CraftMargin(bag, price, 0.05, fair, vend)
+eq("craft valued at vendor price", mv.value, 1800)
+eq("craft sells to vendor", mv.sellTo, "vendor")
+eq("craft sells on AH when better", Logic.CraftMargin(bag, price, 0.05, fair, function() return 1 end).sellTo, "ah")
+
+-- CompareSnapshots (bands: 3 has at least 12h left, 1 at least 30m, 0 may end any moment)
+local function snap(item, price, q, tl) return {[item] = {[price] = {q = q, tl = tl}}} end
+local r1 = Logic.CompareSnapshots(snap(1, 100, 5, 3), {}, 600)
 eq("vanished early -> sold", r1[1].sold, 5)
-local r2 = Logic.CompareSnapshots(snap(1, "A", 100, 5, 3), {}, 200000)
-eq("vanished after max time -> expired", r2[1].expired, 5)
+local r2 = Logic.CompareSnapshots(snap(1, 100, 5, 3), {}, 43200)
+eq("could have run out of time -> expired", r2[1].expired, 5)
 eq("expired not sold", r2[1].sold, 0)
-local r3 = Logic.CompareSnapshots(snap(1, "A", 100, 5, 3), snap(1, "A", 90, 5, 3), 600)
-eq("undercut repost -> cancelled", r3[1].cancelled, 5)
-eq("undercut repost not sold", r3[1].sold, 0)
-local r4 = Logic.CompareSnapshots(snap(1, "A", 100, 20, 3), snap(1, "A", 100, 15, 3), 600)
+local r4 = Logic.CompareSnapshots(snap(1, 100, 20, 3), snap(1, 100, 15, 3), 600)
 eq("partial buy -> sold", r4[1].sold, 5)
-local r5 = Logic.CompareSnapshots(snap(1, "A", 100, 10, 3), snap(1, "A", 95, 6, 3), 600)
-eq("repost of part -> cancelled part", r5[1].cancelled, 6)
-eq("repost of part -> rest sold", r5[1].sold, 4)
-local r6 = Logic.CompareSnapshots(snap(1, "A", 100, 5, 0), {}, 3600)
-eq("short band gone after 1h -> expired", r6[1].expired, 5)
-eq("new listings only -> nothing", next(Logic.CompareSnapshots({}, snap(1, "A", 100, 5, 3), 600)), nil)
-local r7 = Logic.CompareSnapshots(snap(1, "A", 100, 5, 3), snap(1, "B", 90, 5, 3), 600)
-eq("other seller's listing is not a relist", r7[1].sold, 5)
+local two = {[1] = {[100] = {q = 5, tl = 3}, [150] = {q = 4, tl = 3}}}
+local r5 = Logic.CompareSnapshots(two, snap(1, 100, 5, 3), 600)
+eq("dearer one gone while cheaper stays -> cancelled", r5[1].cancelled, 4)
+eq("dearer one gone while cheaper stays -> not sold", r5[1].sold, 0)
+local r5b = Logic.CompareSnapshots(two, snap(1, 150, 4, 3), 600)
+eq("cheapest gone, dearer stays -> sold", r5b[1].sold, 5)
+local r6 = Logic.CompareSnapshots(snap(1, 100, 5, 0), {}, 60)
+eq("shortest band can always have expired", r6[1].expired, 5)
+local r6b = Logic.CompareSnapshots(snap(1, 100, 5, 1), {}, 600)
+eq("30m+ left, gone after 10m -> sold", r6b[1].sold, 5)
+eq("new listings only -> nothing", next(Logic.CompareSnapshots({}, snap(1, 100, 5, 3), 600)), nil)
+
+-- FlattenSnapshot: old per-seller snapshots merge by price
+local flat = Logic.FlattenSnapshot({[1] = {A = {[100] = {q = 2, tl = 3}}, ["?"] = {[100] = {q = 3, tl = 1}, [90] = {q = 1, tl = 2}}}})
+eq("flatten sums quantity", flat[1][100].q, 5)
+eq("flatten keeps shortest band", flat[1][100].tl, 1)
+eq("flatten keeps other prices", flat[1][90].q, 1)
+eq("flatten leaves flat snapshots alone", Logic.FlattenSnapshot(snap(1, 100, 5, 3))[1][100].q, 5)
 
 -- AddObservation / SalesRate: 12h observed, 6 sold, 2 expired
 local stats = Logic.AddObservation({}, {[1] = {sold = 6, expired = 2, cancelled = 0}}, 43200, 100)

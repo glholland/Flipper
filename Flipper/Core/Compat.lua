@@ -38,11 +38,11 @@ function Compat.ContainerSlots(bag)
     return call(C_Container and C_Container.GetContainerNumSlots, GetContainerNumSlots, bag) or 0
 end
 
--- itemID, count for one bag slot, or nil.
+-- itemID, count, isBound for one bag slot, or nil.
 function Compat.ContainerItem(bag, slot)
     if C_Container and C_Container.GetContainerItemInfo then
         local info = C_Container.GetContainerItemInfo(bag, slot)
-        if info and info.itemID then return info.itemID, info.stackCount or 1 end
+        if info and info.itemID then return info.itemID, info.stackCount or 1, info.isBound and true or false end
         return nil
     end
 end
