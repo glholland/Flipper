@@ -40,3 +40,21 @@ python tests/run_tests.py --syntax
 Forever runs Blizzard's Mainline UI on the 12.1.5 API: use `C_Item`, `C_Container`, `C_TradeSkillUI`, `C_AuctionHouse`; the old item globals (`GetItemInfo`, `GetItemSpell`...) are gone. Blizzard's UI source for the client is the `forever` branch of [Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source/tree/forever).
 
 Plan: `docs/superpowers/plans/2026-11-13-flipper.md`. Third-party notices: `NOTICE`.
+
+## Development and releases
+
+Every push and pull request runs the CI workflow (`.github/workflows/ci.yml`):
+
+- **Lint:** `luac5.1 -p` on every Lua file, then `luacheck` (`.luacheckrc`). Writing an undeclared global fails the build, because a leaked global is how an addon taints Blizzard's UI.
+- **Tests:** `python tests/run_tests.py --syntax` runs the pricing-logic tests under Lua 5.1 (needs `pip install lupa`).
+- **TOC:** `python tools/check_toc.py` checks that `Flipper.toc` and the files on disk agree.
+- **Package:** `python tools/package.py --version <v>` builds `dist/Flipper-<v>.zip`; CI attaches a dev build to each run.
+
+To release, tag the commit and push the tag. The Release workflow reruns the checks, builds the zip with that version in the TOC and publishes a GitHub release with generated notes. A tag with a hyphen (`v0.3.0-beta1`) is published as a pre-release.
+
+```
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+To install a release, unzip it into `World of Warcraft/_forever_/Interface/AddOns`.
