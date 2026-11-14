@@ -1,61 +1,19 @@
 -- Adds Flipper's verdict to item tooltips. Mainline tooltips go through TooltipDataProcessor.
+-- Normally: one verdict line (keep / craft / auction / vendor, with the reason) and the
+-- recipes your own professions use the item in. Hold Shift while hovering for the rest:
+-- prices, where a vendor sells it, sales estimates and every recipe that uses it.
 local _, ns = ...
 local Tooltip = {}
 ns.Tooltip = Tooltip
 local Money = ns.Money
 
-local LABEL = {ah = "Auction it", vendor = "Vendor it", craft = "Craft it"}
-local addVendorLine
+local TAG = "|cff4ade80Flipper|r "
+local GREY = {0.6, 0.6, 0.6}
+local OWN_USES_SHOWN, ALL_USES_SHOWN = 3, 20
 
-local function addLines(tooltip, data)
-    if not FlipperDB or not FlipperDB.tooltip or not data then return end
-    local itemID = data.id
-    if not ns.IsNumber(itemID) or not tooltip.AddLine then return end
-    local advice = ns.Bags.Advice(itemID)
-    if advice.action == "none" then return end
-    local ah = ns.Logic.NetAH(ns.Prices.Fair(itemID), ns.AH_CUT)
-    local vendor = ns.Prices.Vendor(itemID)
-    local parts = {}
-    if ah then parts[#parts + 1] = "AH " .. Money.Format(ah) end
-    if vendor and vendor > 0 then parts[#parts + 1] = "Vendor " .. Money.Format(vendor) end
-    tooltip:AddLine("|cff4ade80Flipper|r " .. table.concat(parts, "  "), 1, 1, 1)
-    local verdict = LABEL[advice.action]
-    if advice.action == "craft" then verdict = verdict .. " (" .. advice.craftName .. ")" end
-    tooltip:AddLine("  Best: " .. verdict .. " " .. Money.Format(advice.perUnit) .. " each", 0.8, 0.8, 0.8)
-    addVendorLine(tooltip, itemID)
-end
-
--- "Vendor: 1s 50c at Name, Zone (x, y)" for items a vendor sells.
-addVendorLine = function(tooltip, itemID)
-    local buy = ns.Vendors.BuyPrice(itemID)
-    if not buy then return end
-    local seller = ns.Vendors.Sellers(itemID)[1]
-    tooltip:AddLine("  Vendor: " .. Money.Format(buy) .. (seller and (" at " .. ns.Vendors.Describe(seller)) or ""), 0.8, 0.8, 0.8)
-end
-
--- "Sells ~3.2/day (70% of listings sell)" and "You: 12 sold, 3 didn't".
-local function addSalesLines(tooltip, data)
-    if not FlipperDB or not FlipperDB.tooltip or not data or not ns.IsNumber(data.id) or not tooltip.AddLine then return end
-    local perDay, through, hours = ns.Market.Rate(data.id)
-    if perDay then
-        local text = "  Market: ~" .. ns.Market.FormatRate(perDay):gsub("/d", " sold/day")
-        if through then text = text .. string.format(", %d%% of listings sell", math.floor(through * 100 + 0.5)) end
-        tooltip:AddLine(text .. string.format(" (%.0fh watched)", hours or 0), 0.8, 0.8, 0.8)
-    end
-    local name = ns.Compat.ItemInfo(data.id)
-    local sold, failed = ns.Market.Own(name)
-    if sold then
-        tooltip:AddLine(string.format("  You: %d sold, %d didn't (%d%%)", sold, failed,
-            math.floor(sold / (sold + failed) * 100 + 0.5)), 0.8, 0.8, 0.8)
-    end
-end
-
--- "Tailoring 125: Silk Bag x3" for every recipe that takes this item, from Data/CraftDB.lua
--- (all of Blizzard's Forever recipes, trainer-taught ones and enchants included).
--- Your own professions come first. Green: you know it, or have the skill its recipe item
--- asks for. Red: your profession, but not enough skill. Grey: someone else's profession.
--- Trainer recipes have no skill level in Blizzard's data, so they show none.
-local USED_IN_SHOWN, USED_IN_SHIFT = 5, 20
+-- Recipes that take an item, from Data/CraftDB.lua (all of Blizzard's Forever recipes,
+-- trainer-taught ones and enchants included). Trainer recipes have no skill level in
+-- Blizzard's data (skill 0).
 local usedIn
 local function recipesUsing(itemID)
     if not usedIn then
@@ -69,7 +27,7 @@ local function recipesUsing(itemID)
             end
         end
     end
-    return usedIn[itemID]
+    return usedIn[itemID] or {}
 end
 
 local function knownRecipeNames()
@@ -80,34 +38,114 @@ local function knownRecipeNames()
     return known
 end
 
-local function addUsedInLines(tooltip, data)
-    if not FlipperDB or not FlipperDB.tooltip or not data or not ns.IsNumber(data.id) or not tooltip.AddLine then return end
-    local uses = recipesUsing(data.id)
-    if not uses then return end
+-- Splits an item's uses into your professions' and everyone else's, yours sorted by skill.
+-- Each of your uses gets .known and .reach (known, or its recipe item's skill is within yours).
+local function sortedUses(itemID)
     local mine = FlipperCharDB and FlipperCharDB.professions or {}
-    table.sort(uses, function(a, b)
-        local am, bm = mine[a.profession] and 1 or 0, mine[b.profession] and 1 or 0
-        if am ~= bm then return am > bm end
+    local known = knownRecipeNames()
+    local own, others, knownCount = {}, {}, 0
+    for _, use in ipairs(recipesUsing(itemID)) do
+        local skill = mine[use.profession]
+        if skill then
+            use.known = known[use.name:lower()] or false
+            use.reach = use.known or (use.skill > 0 and skill >= use.skill)
+            use.tooHard = use.skill > skill
+            if use.known then knownCount = knownCount + 1 end
+            own[#own + 1] = use
+        else
+            others[#others + 1] = use
+        end
+    end
+    local function order(a, b)
         if a.profession ~= b.profession then return a.profession < b.profession end
         if a.skill ~= b.skill then return a.skill < b.skill end
         return a.name < b.name
-    end)
-    local known = knownRecipeNames()
-    local limit = IsShiftKeyDown() and USED_IN_SHIFT or USED_IN_SHOWN
-    tooltip:AddLine("|cff4ade80Flipper|r Used in " .. #uses .. (#uses == 1 and " recipe" or " recipes"), 1, 1, 1)
-    for i = 1, math.min(#uses, limit) do
-        local use = uses[i]
-        local skill = mine[use.profession]
-        local isKnown = known[use.name:lower()]
-        local r, g, b = 0.6, 0.6, 0.6
-        if isKnown or (skill and use.skill > 0 and skill >= use.skill) then r, g, b = 0.29, 0.87, 0.5
-        elseif skill and use.skill > skill then r, g, b = 0.97, 0.44, 0.44
-        elseif skill then r, g, b = 1, 1, 1 end
-        local label = use.profession .. (use.skill > 0 and (" " .. use.skill) or "")
-        tooltip:AddLine(string.format("  %s: %s x%d%s", label, use.name, use.qty, isKnown and " (known)" or ""), r, g, b)
     end
-    if #uses > limit then
-        tooltip:AddLine(string.format("  +%d more%s", #uses - limit, IsShiftKeyDown() and "" or " (hold Shift)"), 0.6, 0.6, 0.6)
+    table.sort(own, function(a, b)
+        if a.known ~= b.known then return a.known end
+        return order(a, b)
+    end)
+    table.sort(others, order)
+    return own, others, knownCount
+end
+
+-- "Keep for Tailoring (3 known, 6 recipes)  -  AH 2s 40c", "Craft Silk Bag: 3s each", ...
+local function verdict(advice, own, knownCount)
+    local price
+    if advice.action == "ah" then price = "AH " .. Money.Format(advice.perUnit)
+    elseif advice.action == "vendor" then price = "vendor " .. Money.Format(advice.perUnit) end
+    if advice.action == "craft" then
+        return "Craft " .. advice.craftName .. ": " .. Money.Format(advice.perUnit) .. " each"
+    end
+    if #own > 0 then
+        local professions, seen = {}, {}
+        for _, use in ipairs(own) do
+            if not seen[use.profession] then seen[use.profession] = true; professions[#professions + 1] = use.profession end
+        end
+        local counts = knownCount > 0 and string.format("%d known, %d %s", knownCount, #own, #own == 1 and "recipe" or "recipes")
+            or string.format("%d %s", #own, #own == 1 and "recipe" or "recipes")
+        return "Keep for " .. table.concat(professions, ", ") .. " (" .. counts .. ")" .. (price and ("  -  or " .. price) or "")
+    end
+    if advice.action == "ah" then return "Auction it: " .. Money.Format(advice.perUnit) .. " each after the cut" end
+    if advice.action == "vendor" then return "Vendor it: " .. Money.Format(advice.perUnit) .. " each" end
+end
+
+local function useLine(tooltip, use)
+    local r, g, b = unpack(GREY)
+    if use.reach then r, g, b = 0.29, 0.87, 0.5
+    elseif use.tooHard then r, g, b = 0.97, 0.44, 0.44
+    elseif use.reach ~= nil then r, g, b = 1, 1, 1 end
+    local label = use.profession .. (use.skill > 0 and (" " .. use.skill) or "")
+    tooltip:AddLine(string.format("  %s: %s x%d%s", label, use.name, use.qty, use.known and " (known)" or ""), r, g, b)
+end
+
+local function addDetails(tooltip, itemID)
+    local parts = {}
+    local ah = ns.Logic.NetAH(ns.Prices.Fair(itemID), ns.AH_CUT)
+    local vendor = ns.Prices.Vendor(itemID)
+    if ah then parts[#parts + 1] = "AH after cut " .. Money.Format(ah) end
+    if vendor and vendor > 0 then parts[#parts + 1] = "vendor pays " .. Money.Format(vendor) end
+    if #parts > 0 then tooltip:AddLine("  " .. table.concat(parts, ", "), unpack(GREY)) end
+    local buy = ns.Vendors.BuyPrice(itemID)
+    if buy then
+        local seller = ns.Vendors.Sellers(itemID)[1]
+        tooltip:AddLine("  Sold by vendors: " .. Money.Format(buy) .. (seller and (" at " .. ns.Vendors.Describe(seller)) or ""), unpack(GREY))
+    end
+    local perDay, through, hours = ns.Market.Rate(itemID)
+    if perDay then
+        local text = "  Market: ~" .. ns.Market.FormatRate(perDay):gsub("/d", " sold/day")
+        if through then text = text .. string.format(", %d%% of listings sell", math.floor(through * 100 + 0.5)) end
+        tooltip:AddLine(text .. string.format(" (%.0fh watched)", hours or 0), unpack(GREY))
+    end
+    local sold, failed = ns.Market.Own((ns.Compat.ItemInfo(itemID)))
+    if sold then
+        tooltip:AddLine(string.format("  You: %d sold, %d didn't (%d%%)", sold, failed,
+            math.floor(sold / (sold + failed) * 100 + 0.5)), unpack(GREY))
+    end
+end
+
+local function addLines(tooltip, data)
+    if not FlipperDB or not FlipperDB.tooltip or not data then return end
+    local itemID = data.id
+    if not ns.IsNumber(itemID) or not tooltip.AddLine then return end
+    local advice = ns.Bags.Advice(itemID)
+    local own, others, knownCount = sortedUses(itemID)
+    local text = verdict(advice, own, knownCount)
+    if not text and #others == 0 then return end
+    tooltip:AddLine(TAG .. (text or "No use for your professions"), 1, 1, 1)
+    local shift = IsShiftKeyDown()
+    if shift then addDetails(tooltip, itemID) end
+    local shown = 0
+    for i = 1, math.min(#own, shift and ALL_USES_SHOWN or OWN_USES_SHOWN) do useLine(tooltip, own[i]); shown = shown + 1 end
+    if shift then
+        for i = 1, math.min(#others, ALL_USES_SHOWN - shown) do useLine(tooltip, others[i]); shown = shown + 1 end
+    end
+    local hidden = #own + #others - shown
+    if hidden > 0 then
+        tooltip:AddLine(string.format("  +%d more %s%s", hidden, hidden == 1 and "use" or "uses",
+            shift and "" or " (hover with Shift held)"), unpack(GREY))
+    elseif not shift then
+        tooltip:AddLine("  Shift: prices and sales", unpack(GREY))
     end
 end
 
@@ -117,8 +155,6 @@ function Tooltip.Install()
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
             -- Never let a pricing hiccup break the game's tooltip.
             pcall(addLines, tooltip, data)
-            pcall(addSalesLines, tooltip, data)
-            pcall(addUsedInLines, tooltip, data)
         end)
         Tooltip.installed = true
     end
