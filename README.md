@@ -32,6 +32,8 @@ Item tooltips get a one-line verdict (keep, craft, auction or vendor) and the re
 2. Unzip it into `World of Warcraft/_forever_/Interface/AddOns`, so that `AddOns/Flipper/Flipper.toc` exists.
 3. Restart the game. A `/reload` does not pick up a new addon.
 
+Full instructions, updating, and installing from source: [Install guide](docs/install.md).
+
 ## First steps
 
 1. Open the auction house and run an Auctionator scan, so there are prices to work with.
@@ -41,6 +43,7 @@ Item tooltips get a one-line verdict (keep, craft, auction or vendor) and the re
 
 ## Documentation
 
+- [Install guide](docs/install.md): finding the AddOns folder, updating, installing from source.
 - [User guide](docs/guide.md): every tab, the tooltip and the slash commands.
 - [Sales estimates](docs/sales-estimates.md): how Sold/day is worked out and how far to trust it.
 - [Data](docs/data.md): where prices, recipes and vendor information come from.
