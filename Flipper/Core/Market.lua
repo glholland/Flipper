@@ -15,8 +15,9 @@ local WINDOW_DAYS = 14
 local LOAD_WAIT = 8             -- seconds to wait for seller names to load
 
 -- Version 2: Auctionator's day numbers. Version 3: sales are judged by price, not by
--- seller (the client never names other sellers), so older stats are discarded.
-local STATS_VERSION = 3
+-- seller (the client never names other sellers). Version 4: time-left bands are 1-4, not
+-- 0-3 (version 3 counted listings with 2-12h left as unable to expire). Older stats are discarded.
+local STATS_VERSION = 4
 
 local function db()
     FlipperDB.market = FlipperDB.market or {stats = {}}
@@ -69,7 +70,7 @@ local function readSnapshot(acceptPartial)
             C_AuctionHouse.GetReplicateItemInfo(index)
         if not hasAllInfo then pending = pending + 1 end
         if ns.IsNumber(itemID) and ns.IsNumber(count) and count > 0 and ns.IsNumber(buyout) and buyout > 0 then
-            local band = C_AuctionHouse.GetReplicateItemTimeLeft and C_AuctionHouse.GetReplicateItemTimeLeft(index) or 3
+            local band = C_AuctionHouse.GetReplicateItemTimeLeft and C_AuctionHouse.GetReplicateItemTimeLeft(index) or 1
             local unit = math.floor(buyout / count)
             local prices = snapshot[itemID] or {}
             snapshot[itemID] = prices

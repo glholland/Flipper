@@ -120,9 +120,10 @@ end
 -- Sales estimates from two full AH snapshots
 ------------------------------------------------------------------------
 -- snapshot[itemID][unitPrice] = {q = quantity, tl = shortest time-left band}
--- Bands (Enum.AuctionHouseTimeLeftBand): 0 <30m, 1 30m-2h, 2 2h-12h, 3 12h-48h.
+-- Bands as GetReplicateItemTimeLeft returns them (1-4, checked against a real scan):
+-- 1 <30m, 2 30m-2h, 3 2h-12h, 4 12h-48h. An unknown band counts as "may end any moment".
 -- The client doesn't name other sellers, so listings are compared by item and price only.
-Logic.BAND_MIN_SECONDS = {[0] = 0, [1] = 1800, [2] = 7200, [3] = 43200}
+Logic.BAND_MIN_SECONDS = {[1] = 0, [2] = 1800, [3] = 7200, [4] = 43200}
 
 -- What happened to listings missing from `now`, `elapsed` seconds after `prev`:
 -- {[itemID] = {sold, expired, cancelled}}. Rules, most cautious first:
