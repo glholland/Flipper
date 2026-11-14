@@ -1,6 +1,34 @@
 # User guide
 
-At the auction house, Flipper is a tab along the bottom next to Auctionator's. Anywhere else, `/flip` opens it as a movable, resizable window.
+At the auction house, Flipper is a tab along the bottom next to Auctionator's. Anywhere else, `/flip` or the minimap button opens it as a movable, resizable window.
+
+## Minimap button and settings
+
+| On the minimap button | Does |
+|---|---|
+| Click | Open or close Flipper |
+| Right-click | Settings menu: scans, toggles, thresholds, window reset |
+| Shift-click | Quick scan (at the AH) |
+| Drag | Move it around the minimap |
+| Hover | How old prices and sales data are, when the next Full scan is allowed, the best deal |
+
+Flipper is also in the minimap's addon menu, which works the same way and stays there if you hide the button.
+
+If another addon has loaded LibDBIcon (Questie, Details and Journalator all do), the button is registered with it. That means Leatrix Plus's minimap button bag and square-minimap options handle it like every other button. Flipper itself ships no libraries.
+
+Every setting is in the right-click menu and on one page under **Esc > Options > AddOns > Flipper** (`/flip options`):
+
+| Setting | Default |
+|---|---|
+| Quick scan when the auction house opens | Off |
+| Flipper lines in item tooltips | On |
+| Smallest profit worth showing, per item (flips, vendor buys, deals) | 10c |
+| Deals: listed at or below this share of the usual price | 70% |
+| Show minimap button | On |
+| Lock minimap button | Off |
+| Which recipes the Recipes tab lists | Your professions |
+
+The menu offers preset amounts; the options page also takes a typed amount such as `2s 50c` or `1g`.
 
 ## Scanning
 
@@ -30,7 +58,7 @@ In every list:
 
 ## Deals
 
-Items whose cheapest listing is 70% or less of their usual price (Auctionator's 21-day average). Only items seen today or yesterday with at least 5 days of price history are listed.
+Items whose cheapest listing is 70% or less (a setting) of their usual price (Auctionator's 21-day average). Only items seen today or yesterday with at least 5 days of price history are listed.
 
 - **Now / Usual:** cheapest listing and the average.
 - **Profit/ea:** the average after the 5% AH cut, minus the price now.
@@ -118,10 +146,12 @@ The [Tooltips guide](tooltips.md) explains every line, the colours, and what eac
 | `/flip deals`, `flips`, `vendor`, `bags`, `crafts`, `recipes`, `history` | Open that tab |
 | `/flip quick` (or `scan`) | Quick scan |
 | `/flip full` (or `market`) | Full scan |
+| `/flip options` (or `config`) | Open the settings page |
+| `/flip minimap` | Show or hide the minimap button |
 | `/flip auto` | Toggle Auto quick scan |
 | `/flip history <item link or ID>` | Open one item's history |
 | `/flip recipes all` | Show recipes for every profession |
-| `/flip minprofit <copper>` | Smallest flip worth listing |
+| `/flip minprofit <amount>` | Smallest profit worth showing: `50`, `2s 50c`, `1g` |
 | `/flip tooltip` | Toggle tooltip lines |
 | `/flip verify` | Compare the shipped recipe data with your known recipes |
 | `/flip reset` | Reset the window's size and position |

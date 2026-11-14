@@ -717,7 +717,7 @@ function Window.Create()
     frame.auto.label:SetPoint("LEFT", frame.auto, "RIGHT", 0, 1)
     frame.auto.label:SetText("Auto quick scan")
     frame.auto:SetHitRectInsets(0, -frame.auto.label:GetStringWidth() - 4, 0, 0)
-    frame.auto:SetScript("OnClick", function(self) FlipperDB.autoQuickScan = self:GetChecked() and true or false end)
+    frame.auto:SetScript("OnClick", function(self) ns.Settings.Set("autoQuickScan", self:GetChecked()) end)
     tooltip(frame.auto, "Auto quick scan when the AH opens", "Runs a Quick scan a few seconds after you open the "
         .. "auction house. Skipped when Auctionator is set to scan on open (Flipper uses its scan), when prices are "
         .. "under 5 minutes old, or when you've already started a search. Never runs a Full scan.")

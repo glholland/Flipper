@@ -13,6 +13,7 @@ function events.ADDON_LOADED(name)
     ns.Market.Migrate()
     ns.Scanner.OnChanged = refresh
     ns.Market.OnChanged = refresh
+    ns.Settings.OnChanged = function(key) ns.Launcher.Changed(key) end
     ns.Tooltip.Install()
 end
 
@@ -43,6 +44,8 @@ function events.PLAYER_LOGIN()
         end)
     end
     ns.RecipeShop.Professions()
+    ns.Options.Register()
+    ns.Launcher.Create()
     local api = Auctionator and Auctionator.API and Auctionator.API.v1
     if api and api.RegisterForDBUpdate then
         pcall(api.RegisterForDBUpdate, ns.CALLER_ID, onPricesUpdated)
@@ -128,17 +131,20 @@ local commands = {
     scan = function() ns.Scanner.Start() end,
     quick = function() ns.Scanner.Start() end,
     auto = function()
-        FlipperDB.autoQuickScan = not FlipperDB.autoQuickScan
-        ns.Print("auto quick scan when the AH opens " .. (FlipperDB.autoQuickScan and "on" or "off"))
-        refresh()
+        ns.Print("auto quick scan when the AH opens " .. ns.Settings.Format("autoQuickScan", ns.Settings.Toggle("autoQuickScan")))
     end,
     tooltip = function()
-        FlipperDB.tooltip = not FlipperDB.tooltip
-        ns.Print("tooltip lines " .. (FlipperDB.tooltip and "on" or "off"))
+        ns.Print("tooltip lines " .. ns.Settings.Format("tooltip", ns.Settings.Toggle("tooltip")))
     end,
+    minimap = function()
+        if ns.Settings.Toggle("showMinimap") then ns.Print("minimap button shown") end   -- hiding prints its own note
+    end,
+    options = function() ns.Launcher.OpenOptions() end,
+    config = function() ns.Launcher.OpenOptions() end,
+    settings = function() ns.Launcher.OpenOptions() end,
 }
 local function help()
-    ns.Print("/flip - window | /flip deals | /flip quick (quick scan) | /flip full (full scan) | /flip auto | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip history [item] |/flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
+    ns.Print("/flip - window | /flip options | /flip minimap | /flip deals | /flip quick (quick scan) | /flip full (full scan) | /flip auto | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip history [item] |/flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
 end
 SLASH_FLIPPER1 = "/flip"
 SLASH_FLIPPER2 = "/flipper"
@@ -157,9 +163,9 @@ SlashCmdList.FLIPPER = function(message)
     end
     if command == "minprofit" then
         local copper = tonumber(arg)
+        copper = copper or ns.Money.Parse(arg)
         if copper and copper >= 1 then
-            FlipperDB.minFlipProfit = math.floor(copper)
-            ns.Print("minimum flip profit " .. ns.Money.Format(FlipperDB.minFlipProfit) .. " per item")
+            ns.Print("minimum flip profit " .. ns.Money.Format(ns.Settings.Set("minFlipProfit", copper)) .. " per item")
         else help() end
         return
     end

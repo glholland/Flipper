@@ -9,6 +9,8 @@ ns.DEFAULTS = {
     autoQuickScan = false,    -- quick scan a few seconds after the AH opens
     window = {},
     tooltip = true,
+    dealRatio = 0.7,          -- Deals: listed at 70% of the usual price or less
+    minimap = {minimapPos = 200},   -- LibDBIcon-style: minimapPos (degrees), hide, lock
 }
 ns.CHAR_DEFAULTS = {
     recipes = {},             -- [recipeSpellID] = {name, profession, output, qtyMin, qtyMax, reagents={{id,qty}}}
