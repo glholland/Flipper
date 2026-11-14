@@ -50,6 +50,51 @@ local function addSalesLines(tooltip, data)
     end
 end
 
+-- "Used in: Tailoring 125 Silk Bag x3" for every shipped recipe that takes this item.
+-- Your own professions come first; green means you have the skill for it.
+local USED_IN_SHOWN, USED_IN_SHIFT = 5, 20
+local usedIn
+local function recipesUsing(itemID)
+    if not usedIn then
+        usedIn = {}
+        for _, entry in pairs(ns.RecipeDB or {}) do
+            local flat = entry[7] or {}
+            for i = 1, #flat - 1, 2 do
+                local list = usedIn[flat[i]] or {}
+                usedIn[flat[i]] = list
+                list[#list + 1] = {profession = entry[1], skill = entry[2] or 0, name = entry[3], qty = flat[i + 1]}
+            end
+        end
+    end
+    return usedIn[itemID]
+end
+
+local function addUsedInLines(tooltip, data)
+    if not FlipperDB or not FlipperDB.tooltip or not data or not ns.IsNumber(data.id) or not tooltip.AddLine then return end
+    local uses = recipesUsing(data.id)
+    if not uses then return end
+    local mine = FlipperCharDB and FlipperCharDB.professions or {}
+    table.sort(uses, function(a, b)
+        local am, bm = mine[a.profession] and 1 or 0, mine[b.profession] and 1 or 0
+        if am ~= bm then return am > bm end
+        if a.profession ~= b.profession then return a.profession < b.profession end
+        if a.skill ~= b.skill then return a.skill < b.skill end
+        return a.name < b.name
+    end)
+    local limit = IsShiftKeyDown() and USED_IN_SHIFT or USED_IN_SHOWN
+    tooltip:AddLine("|cff4ade80Flipper|r Used in " .. #uses .. (#uses == 1 and " recipe" or " recipes"), 1, 1, 1)
+    for i = 1, math.min(#uses, limit) do
+        local use = uses[i]
+        local skill = mine[use.profession]
+        local r, g, b = 0.6, 0.6, 0.6
+        if skill and skill >= use.skill then r, g, b = 0.29, 0.87, 0.5 elseif skill then r, g, b = 0.97, 0.44, 0.44 end
+        tooltip:AddLine(string.format("  %s %d: %s x%d", use.profession, use.skill, use.name, use.qty), r, g, b)
+    end
+    if #uses > limit then
+        tooltip:AddLine(string.format("  +%d more%s", #uses - limit, IsShiftKeyDown() and "" or " (hold Shift)"), 0.6, 0.6, 0.6)
+    end
+end
+
 function Tooltip.Install()
     if Tooltip.installed then return end
     if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
@@ -57,6 +102,7 @@ function Tooltip.Install()
             -- Never let a pricing hiccup break the game's tooltip.
             pcall(addLines, tooltip, data)
             pcall(addSalesLines, tooltip, data)
+            pcall(addUsedInLines, tooltip, data)
         end)
         Tooltip.installed = true
     end
