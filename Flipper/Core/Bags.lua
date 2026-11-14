@@ -12,6 +12,8 @@ function Bags.Advice(itemID, bound)
         ah = not bound and ns.Prices.Fair(itemID) or nil,
         vendor = ns.Prices.Vendor(itemID),
         crafts = ns.Recipes.CraftOptions(itemID),
+        -- Only for enchanters; the value is the materials sold on the AH.
+        disenchant = ns.Disenchant.Known() and ns.Disenchant.Value(itemID) or nil,
         cut = ns.AH_CUT,
     }
 end

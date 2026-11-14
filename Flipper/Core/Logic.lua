@@ -230,7 +230,8 @@ function Logic.SortRows(rows, getter, descending)
 end
 
 -- Picks the best thing to do with one unit of an item.
--- opts = {ah=market price|nil, vendor=sell price|nil, crafts={{name, perUnit}}, cut}
+-- opts = {ah=market price|nil, vendor=sell price|nil, crafts={{name, perUnit}},
+--         disenchant=expected material value|nil, cut}
 -- Ties go to the vendor: instant and no listing risk.
 function Logic.BestUse(opts)
     local best = {action = "none", perUnit = 0}
@@ -238,6 +239,8 @@ function Logic.BestUse(opts)
     if vendor and vendor > 0 then best = {action = "vendor", perUnit = vendor} end
     local ah = Logic.NetAH(opts.ah, opts.cut)
     if ah and ah > best.perUnit then best = {action = "ah", perUnit = ah} end
+    local disenchant = num(opts.disenchant)
+    if disenchant and disenchant > best.perUnit then best = {action = "disenchant", perUnit = disenchant} end
     for _, craft in ipairs(opts.crafts or {}) do
         local value = num(craft.perUnit)
         if value and value > best.perUnit then

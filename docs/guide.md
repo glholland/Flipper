@@ -48,6 +48,7 @@ What each item in your bags is best used for.
 
 - **Auction / Vendor:** whichever pays more per unit, after the AH cut.
 - **Craft:** a recipe you know turns the item into something worth more.
+- **Disenchant:** for enchanters, the materials are worth more on the AH than the item.
 - Soulbound items are never advised for the AH.
 
 Click a row to open Auctionator's Selling tab with that item picked.
@@ -87,9 +88,30 @@ Every item tooltip gets one Flipper line:
 
 - **Keep for Tailoring (3 known, 6 recipes):** your professions use it.
 - **Craft Silk Bag: 3s each:** a recipe you know beats selling it.
+- **Disenchant it:** you're an enchanter and the materials beat selling the item.
 - **Auction it / Vendor it:** nothing you craft needs it; this is the better sale.
 
-Up to three recipes from your own professions follow. Hold Shift before hovering to also see the price after the cut, where a vendor sells it, sales estimates and other professions' recipes.
+For gear, enchanters also see what it disenchants into and the enchants those materials are used in, known enchants first:
+
+```
+Flipper Vendor it
+  Disenchants into Small Glowing Shard
+  Enchanting: Enchant 2H Weapon - Minor Impact (1 Small Glowing Shard)
+  Enchanting 115: Enchant Shield - Lesser Protection (1 Small Glowing Shard)
+```
+
+Other characters see these lines with Shift held. Disenchant results follow the original-era tables, with Disenchantry's estimates for Forever's own rare items.
+
+Up to three recipes from your own professions follow. When a recipe turns the item into something other recipes use (ore into bars, cloth into bolts, leather into cured leather), the next step is listed under it, so you can see what the item is ultimately for:
+
+```
+Flipper Keep for Tailoring (1 known, 4 recipes)
+  Tailoring: Bolt of Linen Cloth x2 (known)  -> 23 recipes
+      Tailoring 50: Linen Bag (3)
+      Tailoring 70: Reinforced Linen Cape (2)
+```
+
+The next-step lines show your own professions; with Shift held they include every profession. Hold Shift before hovering to also see the price after the cut, where a vendor sells it, sales estimates and other professions' recipes.
 
 Recipe lines are green if you know the recipe or have the skill for it, red if your skill is too low, and grey for other professions. Recipes learned from trainers show no skill number.
 

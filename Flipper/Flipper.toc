@@ -16,6 +16,7 @@ Core\Money.lua
 Core\Logic.lua
 Core\Compat.lua
 Core\Prices.lua
+Core\Disenchant.lua
 Core\Recipes.lua
 Core\Bags.lua
 Core\Scanner.lua

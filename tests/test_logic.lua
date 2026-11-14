@@ -154,4 +154,22 @@ eq("money copper only", plain(Money.Format(7)), "7c")
 eq("money skips zero parts", plain(Money.Format(10005)), "1g 5c")
 eq("money zero", Money.Format(0), "")
 
+-- Disenchant outcomes and value
+local DE = ns.Disenchant
+local armor = DE.Outcomes(1, 2, 29, 4)        -- uncommon armor, ilvl 29
+eq("DE uncommon armor dust", armor[1].itemID, 11083)
+eq("DE uncommon armor shard chance", armor[3].chance, 5)
+eq("DE forever weapon essence", DE.Outcomes(1, 2, 25, 2)[2].itemID, 10939)
+eq("DE rare ilvl 29 -> large glowing shard", DE.Outcomes(1, 3, 29, 4)[1].itemID, 11084)
+eq("DE forever rare ilvl 29 -> small glowing shard", DE.Outcomes(250000, 3, 22, 4)[1].itemID, 10978)
+eq("DE not gear", DE.Outcomes(1, 2, 29, 7), nil)
+eq("DE excluded wand", DE.Outcomes(11287, 2, 20, 2), nil)
+eq("DE common quality", DE.Outcomes(1, 1, 29, 4), nil)
+local dePrices = {[11083] = 100, [11082] = 1000}
+-- 75% x 1.5 x 100 + 20% x 1.5 x 1000 (+ unpriced shard) = 112.5 + 300
+eq("DE expected value", DE.ExpectedValue(armor, function(id) return dePrices[id] end), 412)
+eq("DE no prices", DE.ExpectedValue(armor, function() return nil end), nil)
+eq("best use disenchant", Logic.BestUse{vendor = 100, ah = 50, disenchant = 200, cut = 0.05}.action, "disenchant")
+eq("vendor beats weak disenchant", Logic.BestUse{vendor = 4131, disenchant = 1172, cut = 0.05}.action, "vendor")
+
 return passed, failures

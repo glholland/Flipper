@@ -4,6 +4,7 @@ Flipper contains code adapted from Disenchantry by x_Raven_x, used under the MIT
   Core/Prices.lua   <- Disenchantry PriceProviders.lua (TSM/Auctionator adapters, quote cache)
   Core/Money.lua    <- Disenchantry PriceProviders.lua (Prices.FormatMoney)
   Core/Scanner.lua  <- Disenchantry Core/AuctionScan.lua (browse paging, interruption hooks)
+  Core/Disenchant.lua <- Disenchantry DisenchantResults.lua, ForecastPolicy.lua (disenchant tables, Forever rules)
 
 MIT License
 

@@ -13,7 +13,8 @@ local TAB_ORDER = {"deals", "flips", "vendor", "bags", "crafts", "recipes", "his
 local TAB_LABEL = {deals = "Deals", flips = "Sell to vendor", vendor = "Buy from vendor", bags = "Bags", crafts = "Crafts", recipes = "Recipes",
     history = "History"}
 
-local ACTION_TEXT = {ah = "|cff60a5faAuction|r", vendor = "Vendor", craft = "|cff4ade80Craft|r", none = "|cff9ca3af-|r"}
+local ACTION_TEXT = {ah = "|cff60a5faAuction|r", vendor = "Vendor", craft = "|cff4ade80Craft|r",
+    disenchant = "|cffc084fcDisenchant|r", none = "|cff9ca3af-|r"}
 local RECIPE_STATUS = {
     learnable = "|cff4ade80%d|r", skill = "|cfff87171%d|r", other = "|cff9ca3af%d|r", unverified = "|cfffbbf24%d?|r",
 }
