@@ -107,6 +107,7 @@ end)
 
 local commands = {
     [""] = function() ns.Window.Toggle() end,
+    deals = function() ns.Window.Toggle("deals") end,
     flips = function() ns.Window.Toggle("flips") end,
     vendor = function() ns.Window.Toggle("vendor") end,
     market = function() ns.Window.Toggle("flips"); ns.Market.Start() end,
@@ -122,7 +123,7 @@ local commands = {
     end,
 }
 local function help()
-    ns.Print("/flip - window | /flip scan | /flip market (full scan for sales) | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip history [item] |/flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
+    ns.Print("/flip - window | /flip deals | /flip scan | /flip market (full scan for sales) | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip history [item] |/flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
 end
 SLASH_FLIPPER1 = "/flip"
 SLASH_FLIPPER2 = "/flipper"
