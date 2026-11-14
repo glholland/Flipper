@@ -2,6 +2,26 @@
 
 At the auction house, Flipper is a tab along the bottom next to Auctionator's. Anywhere else, `/flip` opens it as a movable, resizable window.
 
+## Scanning
+
+Every tab has the scan controls under the tab row:
+
+| Control | Does |
+|---|---|
+| **Quick scan** | Cheapest price of every item. A few seconds, no limit. Updates Sell to vendor. |
+| **Full scan** | Every listing. Once per 15 minutes, and may freeze the game for a few seconds. Updates Sold/day, History, Sell to vendor and Auctionator's prices. Shows a countdown while it's waiting. |
+| **Auto quick scan** | Runs a Quick scan a few seconds after you open the AH. Off by default. Never runs a Full scan. |
+
+Flipper shares scans with Auctionator instead of competing with it:
+
+- A Full scan from Flipper runs through Auctionator's full scan, so one scan updates both addons, and both respect the same 15-minute limit.
+- When Auctionator scans by itself (its button or its own autoscan), Flipper reads the results; the buttons are disabled until it finishes.
+- Auto quick scan stays out of the way when Auctionator is set to scan on open, when prices are under 5 minutes old, or when you've already started a search.
+
+When a scan finishes, the status line says what it updated. The bottom right of every tab shows how old the prices and the sales data are; it turns orange when sales data is over 6 hours old.
+
+## Lists
+
 In every list:
 
 - Click a column header to sort; click again to reverse.
@@ -24,8 +44,8 @@ Auctions priced below what any vendor pays. Buy, walk to a vendor, sell.
 
 ![A scan in progress](images/sell-to-vendor-scan.png)
 
-- **Scan** browses the AH once and fills this list. No cooldown, nothing saved.
-- **Full** downloads every listing for the [sales estimates](sales-estimates.md). The button shows the time left on its 15-minute cooldown.
+- Filled by either scan. After a **Full scan**, **Qty** is exactly how many are listed below vendor price. After a **Quick scan** it is everything listed for that item.
+- A Full scan can't tell which listings are yours, so your own cheap auctions may appear after one.
 - `/flip minprofit 50` hides flips under 50 copper per item (default 10).
 
 "Listed" is the item's total on the AH, not how many are below vendor price.
@@ -123,8 +143,9 @@ Recipe lines are green if you know the recipe or have the skill for it, red if y
 |---|---|
 | `/flip` | Open or close the window |
 | `/flip deals`, `flips`, `vendor`, `bags`, `crafts`, `recipes`, `history` | Open that tab |
-| `/flip scan` | Scan for auctions below vendor price |
-| `/flip market` | Run a full scan |
+| `/flip quick` (or `scan`) | Quick scan |
+| `/flip full` (or `market`) | Full scan |
+| `/flip auto` | Toggle Auto quick scan |
 | `/flip history <item link or ID>` | Open one item's history |
 | `/flip recipes all` | Show recipes for every profession |
 | `/flip minprofit <copper>` | Smallest flip worth listing |

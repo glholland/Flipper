@@ -39,7 +39,7 @@ Full instructions, updating, and installing from source: [Install guide](docs/in
 1. Open the auction house and run an Auctionator scan, so there are prices to work with.
 2. Open each of your profession windows once. Flipper reads your recipes from them.
 3. Click the **Flipper** tab at the bottom of the auction house, or type `/flip` anywhere.
-4. Press **Full** on the Sell to vendor tab on most AH visits. Two full scans between 15 minutes and 12 hours apart start filling the Sold/day columns.
+4. Press **Full scan** on most AH visits. Two full scans between 15 minutes and 12 hours apart start filling the Sold/day columns. **Quick scan** is the fast, unlimited option for the Sell to vendor list.
 
 ## Documentation
 

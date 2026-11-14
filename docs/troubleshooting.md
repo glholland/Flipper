@@ -8,7 +8,9 @@
 
 **Sold/day shows "-".** It needs two full scans 15 minutes to 12 hours apart, and at least an hour watched in total. See [Sales estimates](sales-estimates.md).
 
-**"Full" is greyed out.** Full scans are limited to one every 15 minutes; the button shows the time left.
+**"Full scan" is greyed out.** Full scans are limited to one every 15 minutes, shared with Auctionator; the button shows the time left. Both buttons are also greyed while any scan runs, including Auctionator's.
+
+**Auto quick scan didn't run.** It skips when Auctionator is set to scan on open, when prices are under 5 minutes old, or when you started a search first.
 
 **Buy from vendor has few rows or no locations.** Install Questie, or open vendors as you travel; Flipper remembers their stock and position.
 

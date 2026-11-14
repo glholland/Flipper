@@ -5,9 +5,10 @@ local Window = {tab = "flips", offset = 0}
 ns.Window = Window
 local Money = ns.Money
 
-local ROW_HEIGHT, HEADER_Y, TOP_ROWS_Y = 22, -56, -74
+local ROW_HEIGHT, HEADER_Y, TOP_ROWS_Y = 22, -84, -102
+local STRIP_Y, RULE_Y = -53, -78           -- scan controls and tab controls sit on one strip
 local VALUE_WIDTH, ICON_SPACE, PAD = 92, 34, 12
-local MIN_W, MIN_H, MAX_W, MAX_H = 680, 260, 1400, 1000
+local MIN_W, MIN_H, MAX_W, MAX_H = 680, 300, 1400, 1000
 local DEFAULT_W, DEFAULT_H = 760, 440
 local TAB_ORDER = {"deals", "flips", "vendor", "bags", "crafts", "recipes", "history"}
 local TAB_LABEL = {deals = "Deals", flips = "Sell to vendor", vendor = "Buy from vendor", bags = "Bags", crafts = "Crafts", recipes = "Recipes",
@@ -19,9 +20,9 @@ local RECIPE_STATUS = {
     learnable = "|cff4ade80%d|r", skill = "|cfff87171%d|r", other = "|cff9ca3af%d|r", unverified = "|cfffbbf24%d?|r",
 }
 local STATUS = {
-    idle = "Open the AH and press Scan.", browse = "Browsing the auction house...",
+    idle = "Open the AH and press Quick scan.", browse = "Quick scan: browsing the auction house...",
     evaluating = "Checking vendor prices...", closed = "Open the auction house to scan.",
-    unsupported = "This client has no modern AH API.", interrupted = "Scan interrupted by another search.",
+    unsupported = "This client has no modern AH API.", interrupted = "Quick scan stopped: another search started.",
     failed = "The AH refused the browse request. Try again.", timeout = "The AH stopped answering. Try again.",
     stopped = "Stopped.",
 }
@@ -45,7 +46,7 @@ local TABS = {
         {"AH min", function(r) return r.minPrice end, function(r) return Money.Format(r.minPrice) end},
         {"Vendor", function(r) return r.vendor end, function(r) return Money.Format(r.vendor) end},
         {"Profit/ea", function(r) return r.profit end, function(r) return green(Money.Format(r.profit)) end},
-        {"Listed", function(r) return r.quantity end, function(r) return tostring(r.quantity) end, 64},
+        {"Qty", function(r) return r.quantity end, function(r) return tostring(r.quantity) end, 56},
         {"Sold/day", function(r) return (ns.Market.Rate(r.itemID)) end,
             function(r) return ns.Market.FormatRate((ns.Market.Rate(r.itemID))) end, 70},
     },
@@ -166,8 +167,8 @@ local MAX_COLUMNS = 7
 local LEFT_ALIGNED = {["Best use"] = true, ["Where to buy"] = true}
 -- Shown in the middle of an empty list.
 local EMPTY = {
-    deals = "No deals right now.\nDeals are items listed at 70% or less of their usual price.\nScan the AH with Auctionator for fresh prices.",
-    flips = "Nothing to sell to a vendor yet.\nWith the auction house open, press Scan to find listings\ncheaper than what a vendor pays for them.",
+    deals = "No deals right now.\nDeals are items listed at 70% or less of their usual price.\nRun a Full scan (or an Auctionator scan) for fresh prices.",
+    flips = "Nothing to sell to a vendor yet.\nWith the auction house open, press Quick scan or Full scan to find listings\ncheaper than what a vendor pays for them.",
     vendor = "No vendor flips found.\nOpen vendors as you travel (Flipper remembers their stock),\nor install Questie to know every vendor.",
     bags = "Your bags are empty, or item info is still loading.",
     crafts = "No recipes known yet.\nOpen each profession window once so Flipper can learn your recipes.",
@@ -175,9 +176,10 @@ local EMPTY = {
     history = "No items found.\nAuctionator has no prices from the last 14 days (scan the AH with it),\nor nothing matches your search.",
 }
 local MARKET_STATUS = {
-    replicating = "Full scan: waiting for the AH...", reading = "Full scan: reading listings...",
-    timeout = "Full scan: the AH didn't answer. Try again later.", unsupported = "Full scans aren't available on this client.",
+    timeout = "Full scan: the AH didn't answer. Try again.", unsupported = "Full scans aren't available on this client.",
+    closed = "Full scan stopped: the AH closed. The 15-minute limit still applies.",
 }
+local NOTICE_SECONDS = 10
 
 local function craftRows()
     local rows = {}
@@ -332,24 +334,21 @@ function Window.Refresh()
     end
     for key, button in pairs(frame.tabs) do button:SetSelected(key == Window.tab) end
     local status
+    Window.UpdateScanButtons()
+    frame.filter:SetShown(Window.tab == "recipes")
     if Window.tab == "flips" then
         local s = ns.Scanner
         status = STATUS[s.state] or ""
         if s.state == "done" then
-            status = string.format("%d flips from %d items on the AH.", #s.rows, s.total)
-            if s.deferred > 0 then status = status .. string.format(" %d items had no data yet; scan again.", s.deferred) end
+            if s.source == "full" then
+                status = string.format("%d items below vendor price, from the last full scan (Qty = how many are below it).", #s.rows)
+            else
+                status = string.format("%d items below vendor price, from the last quick scan (Qty = all listed).", #s.rows)
+            end
+            if s.deferred > 0 then status = status .. string.format(" %d items had no data yet.", s.deferred) end
         end
         if MARKET_STATUS[ns.Market.state] then status = MARKET_STATUS[ns.Market.state] end
-        local open = ns.Compat.AuctionHouseOpen()
-        frame.scan:SetEnabled(open and not s.running)
-        frame.scan:Show()
-        Window.UpdateMarketButton()
-        frame.market:Show()
-        frame.filter:Hide()
     else
-        frame.scan:Hide()
-        frame.market:Hide()
-        frame.filter:SetShown(Window.tab == "recipes")
         frame.filter:SetText(ns.RecipeShop.FilterLabel())
         if Window.tab == "recipes" then
             status = #data .. " money-making recipes you don't know. Skill: |cff4ade80can learn|r "
@@ -369,8 +368,8 @@ function Window.Refresh()
         elseif Window.tab == "history" then
             local hours = ns.History.HoursWatched()
             status = string.format("%d items priced by Auctionator in the last 14 days. Click one for its daily history.", #data)
-                .. (hours > 0 and string.format(" Sold/day: %.0fh of full scans.", hours)
-                    or " Sold/day starts after two Full scans.")
+                .. (hours > 0 and string.format(" Sales watched %.0fh.", hours)
+                    or " Sold/day starts after two Full scans 15 min to 12 h apart.")
         elseif Window.tab == "crafts" then
             status = #data == 0 and "Open each profession window once to teach Flipper your recipes."
                 or (#data .. " recipes, AH prices from " .. (ns.Prices.Source() or "nothing"))
@@ -382,7 +381,42 @@ function Window.Refresh()
         status = string.format("%s  [%d-%d of %d]", status, Window.offset + 1,
             math.min(#data, Window.offset + Window.visible), #data)
     end
+    -- A scan that just finished says what it updated, on every tab, for a few seconds.
+    if Window.notice and GetTime() < Window.noticeUntil then status = "|cffffffff" .. Window.notice .. "|r" end
     frame.status:SetText(status)
+    Window.UpdateAge()
+end
+
+-- "Prices 3m old · Sales 6h old" at the bottom right of every tab.
+local function age(seconds)
+    if seconds < 3600 then return math.max(0, math.floor(seconds / 60)) .. "m" end
+    if seconds < 172800 then return math.floor(seconds / 3600) .. "h" end
+    return math.floor(seconds / 86400) .. "d"
+end
+function Window.UpdateAge()
+    local frame = Window.frame
+    if not frame then return end
+    local now = time()
+    local full, summary = ns.Market.AuctionatorTimes()
+    local priced = math.max(full or 0, summary or 0, ns.Market.LastFullScan() or 0, ns.Scanner.doneAt or 0)
+    local sales = ns.Market.LastFullScan()
+    local parts = {}
+    parts[1] = priced > 0 and ("Prices " .. age(now - priced) .. " old") or "No scans yet"
+    if not sales then
+        parts[2] = "|cfffbbf24no sales data: run a Full scan|r"
+    elseif now - sales > 6 * 3600 then
+        parts[2] = "|cfffb923cSales " .. age(now - sales) .. " old: run a Full scan|r"
+    else
+        parts[2] = "Sales " .. age(now - sales) .. " old"
+    end
+    frame.age:SetText("|cff9ca3af" .. table.concat(parts, "  \194\183  ") .. "|r")
+end
+
+-- Called when a scan finishes: shows its summary on every tab.
+function Window.Notice(text)
+    if not text then return end
+    Window.notice, Window.noticeUntil = text, GetTime() + NOTICE_SECONDS
+    C_Timer.After(NOTICE_SECONDS + 0.1, function() if Window.IsVisible() then Window.Refresh() end end)
 end
 
 -- Progress bar for whichever scan is running. A known total fills the bar; an unknown one
@@ -392,6 +426,12 @@ function Window.UpdateProgress()
     if not frame or not frame:IsVisible() then return end
     local fraction, label, elapsed = ns.Market.Progress()
     if not label then fraction, label, elapsed = ns.Scanner.Progress() end
+    if not label and ns.Market.AuctionatorScanning() then
+        Window.auctionatorSince = Window.auctionatorSince or GetTime()
+        fraction, label, elapsed = nil, "Auctionator is scanning; Flipper will use its results", GetTime() - Window.auctionatorSince
+    elseif not ns.Market.AuctionatorScanning() then
+        Window.auctionatorSince = nil
+    end
     local bar = frame.progress
     if not label then bar:Hide(); return end
     if not fraction then
@@ -406,14 +446,24 @@ function Window.UpdateProgress()
     bar:Show()
 end
 
--- Full scan button: shows the cooldown countdown. Called on refresh and once a second.
-function Window.UpdateMarketButton()
-    local frame = Window.frame
-    if not frame or not frame:IsVisible() or Window.tab ~= "flips" then return end
-    local wait = ns.Market.CooldownLeft()
-    frame.market:SetEnabled(ns.Compat.AuctionHouseOpen() and wait == 0 and not MARKET_STATUS[ns.Market.state])
-    frame.market:SetText(wait > 0 and string.format("Full %d:%02d", math.floor(wait / 60), wait % 60) or "Full scan")
+-- Whether any scan is running: Flipper's or Auctionator's.
+function Window.ScanBusy()
+    return ns.Scanner.Busy() or ns.Market.Busy() or ns.Market.AuctionatorScanning()
 end
+
+-- Scan buttons on every tab. Called on refresh and once a second (the cooldown countdown).
+function Window.UpdateScanButtons()
+    local frame = Window.frame
+    if not frame or not frame:IsVisible() then return end
+    local open, busy = ns.Compat.AuctionHouseOpen(), Window.ScanBusy()
+    local wait = ns.Market.CooldownLeft()
+    frame.scan:SetEnabled(open and not busy)
+    frame.market:SetEnabled(open and not busy and wait == 0)
+    frame.market:SetText(wait > 0 and string.format("Full scan %d:%02d", math.floor(wait / 60), wait % 60) or "Full scan")
+    frame.auto:SetChecked(FlipperDB.autoQuickScan and true or false)
+    Window.UpdateAge()
+end
+Window.UpdateMarketButton = Window.UpdateScanButtons
 
 local function clickHeader(index)
     local state = sortState()
@@ -619,8 +669,8 @@ function Window.Create()
     end
     -- Line under the tab strip, and a darker inset behind the list.
     local rule = frame:CreateTexture(nil, "ARTWORK")
-    rule:SetPoint("TOPLEFT", PAD, -50)
-    rule:SetPoint("TOPRIGHT", -PAD, -50)
+    rule:SetPoint("TOPLEFT", PAD, RULE_Y)
+    rule:SetPoint("TOPRIGHT", -PAD, RULE_Y)
     rule:SetHeight(1)
     rule:SetColorTexture(1, 0.82, 0, 0.25)
     local inset = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
@@ -631,34 +681,51 @@ function Window.Create()
     frame.empty:SetPoint("CENTER", inset, "CENTER")
     frame.empty:SetWidth(420)
     frame.empty:SetSpacing(4)
+    -- Scan controls, on every tab: Quick scan, Full scan, auto quick scan.
+    local function tooltip(button, title, text)
+        button:SetMotionScriptsWhileDisabled(true)
+        button:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            GameTooltip:AddLine(title)
+            GameTooltip:AddLine(text, 0.8, 0.8, 0.8, true)
+            if not ns.Compat.AuctionHouseOpen() then GameTooltip:AddLine("Open the auction house first.", 1, 0.5, 0.5) end
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
     frame.scan = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.scan:SetSize(90, 22)
-    frame.scan:SetPoint("TOPRIGHT", -PAD, -28)
-    frame.scan:SetText("Scan")
+    frame.scan:SetSize(96, 22)
+    frame.scan:SetPoint("TOPLEFT", PAD, STRIP_Y)
+    frame.scan:SetText("Quick scan")
     frame.scan:SetScript("OnClick", function() ns.Scanner.Start() end)
+    tooltip(frame.scan, "Quick scan", "Cheapest price of every item. A few seconds, no limit. "
+        .. "Updates Sell to vendor. Doesn't change sales estimates.")
 
-    -- Full scan: snapshot of every auction, compared with the last one to estimate sales.
     frame.market = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.market:SetSize(90, 22)
-    frame.market:SetPoint("RIGHT", frame.scan, "LEFT", -4, 0)
+    frame.market:SetSize(116, 22)
+    frame.market:SetPoint("LEFT", frame.scan, "RIGHT", 4, 0)
     frame.market:SetText("Full scan")
     frame.market:SetScript("OnClick", function() ns.Market.Start() end)
-    frame.market:SetMotionScriptsWhileDisabled(true)
-    frame.market:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:AddLine("Full scan: estimate sales")
-        GameTooltip:AddLine("Records every auction. Each later full scan compares against it to estimate how many sold, "
-            .. "expired or were cancelled. Scans 15 minutes to 12 hours apart count; closer together is more accurate. "
-            .. "Limited to one every 15 minutes; may freeze the game for a moment.", 0.8, 0.8, 0.8, true)
-        GameTooltip:Show()
-    end)
-    frame.market:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    frame.market:Hide()
+    tooltip(frame.market, "Full scan", "Every listing. May freeze the game for a few seconds. "
+        .. "Once per 15 minutes, shared with Auctionator (it updates Auctionator's prices too). "
+        .. "Updates Sold/day, History and Sell to vendor. Two full scans 15 minutes to 12 hours apart estimate sales.")
+
+    frame.auto = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
+    frame.auto:SetSize(24, 24)
+    frame.auto:SetPoint("LEFT", frame.market, "RIGHT", 6, 0)
+    frame.auto.label = frame.auto:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.auto.label:SetPoint("LEFT", frame.auto, "RIGHT", 0, 1)
+    frame.auto.label:SetText("Auto quick scan")
+    frame.auto:SetHitRectInsets(0, -frame.auto.label:GetStringWidth() - 4, 0, 0)
+    frame.auto:SetScript("OnClick", function(self) FlipperDB.autoQuickScan = self:GetChecked() and true or false end)
+    tooltip(frame.auto, "Auto quick scan when the AH opens", "Runs a Quick scan a few seconds after you open the "
+        .. "auction house. Skipped when Auctionator is set to scan on open (Flipper uses its scan), when prices are "
+        .. "under 5 minutes old, or when you've already started a search. Never runs a Full scan.")
 
     -- Recipes tab: which professions to show. Click cycles through the choices.
     frame.filter = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.filter:SetSize(130, 22)
-    frame.filter:SetPoint("TOPRIGHT", -PAD, -28)
+    frame.filter:SetPoint("TOPRIGHT", -PAD, STRIP_Y)
     frame.filter:SetScript("OnClick", function()
         ns.RecipeShop.NextFilter()
         Window.offset = 0
@@ -676,7 +743,7 @@ function Window.Create()
     -- History, one item: back to the summary.
     frame.back = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.back:SetSize(100, 22)
-    frame.back:SetPoint("TOPRIGHT", -PAD, -28)
+    frame.back:SetPoint("TOPRIGHT", -PAD, STRIP_Y)
     frame.back:SetText("< All items")
     frame.back:SetScript("OnClick", function() Window.historyItem, Window.offset = nil, 0; Window.Refresh() end)
     frame.back:Hide()
@@ -685,7 +752,7 @@ function Window.Create()
     -- Plain edit box (no template, so nothing depends on which Blizzard templates exist).
     frame.search = CreateFrame("EditBox", nil, frame)
     frame.search:SetSize(180, 20)
-    frame.search:SetPoint("TOPRIGHT", -PAD - 2, -28)
+    frame.search:SetPoint("TOPRIGHT", -PAD - 2, STRIP_Y - 1)
     frame.search:SetAutoFocus(false)
     frame.search:SetFontObject("ChatFontNormal")
     frame.search:SetTextInsets(6, 6, 0, 0)
@@ -743,8 +810,11 @@ function Window.Create()
         Window.Refresh()
     end)
     frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.age = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.age:SetPoint("BOTTOMRIGHT", -24, 12)
+    frame.age:SetJustifyH("RIGHT")
     frame.status:SetPoint("BOTTOMLEFT", 14, 12)
-    frame.status:SetPoint("BOTTOMRIGHT", -24, 12)
+    frame.status:SetPoint("BOTTOMRIGHT", frame.age, "BOTTOMLEFT", -12, 0)
     frame.status:SetJustifyH("LEFT")
     frame.status:SetWordWrap(false)
 

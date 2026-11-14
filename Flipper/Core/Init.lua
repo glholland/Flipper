@@ -6,6 +6,7 @@ ns.AH_CUT = 0.05              -- auction house cut on sales; vendor sales have n
 
 ns.DEFAULTS = {
     minFlipProfit = 10,       -- copper per unit; smaller flips are noise
+    autoQuickScan = false,    -- quick scan a few seconds after the AH opens
     window = {},
     tooltip = true,
 }
