@@ -18,7 +18,7 @@ jobs:
     name: Lint (luac + luacheck)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Lua 5.1 and luacheck
         run: sudo apt-get update && sudo apt-get install -y lua5.1 lua-check
       - name: Syntax check every Lua file
@@ -35,7 +35,7 @@ jobs:
     name: Tests (Lua 5.1 logic tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -47,7 +47,7 @@ jobs:
     name: TOC and tools
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -61,7 +61,7 @@ jobs:
     needs: [lint, test, toc]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
