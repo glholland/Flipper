@@ -37,7 +37,9 @@ local function playerLocation()
     local mapID = C_Map.GetBestMapForUnit("player")
     if not mapID then return nil end
     local pos = C_Map.GetPlayerMapPosition(mapID, "player")
-    local x, y = pos and pos:GetXY()
+    -- Not `pos and pos:GetXY()`: an `and` keeps only the first value, losing y.
+    local x, y
+    if pos then x, y = pos:GetXY() end
     local info = C_Map.GetMapInfo(mapID)
     return mapID, x and math.floor(x * 1000) / 10, y and math.floor(y * 1000) / 10, info and info.name
 end

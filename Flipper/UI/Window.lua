@@ -229,22 +229,22 @@ local function layout()
     local frame = Window.frame
     local width = frame:GetWidth()
     local columns = Window.Spec()
-    local count = #columns
+    local columnCount = #columns
     local widths, fixed = {}, 0
-    for i = 2, count do widths[i] = columns[i][4] or VALUE_WIDTH; fixed = fixed + widths[i] end
+    for i = 2, columnCount do widths[i] = columns[i][4] or VALUE_WIDTH; fixed = fixed + widths[i] end
     -- The name column grows up to about half the width; any space beyond that is shared by the
     -- value columns, so numbers don't end up stranded at the far right of a wide window.
     local available = width - 2 * PAD - ICON_SPACE - fixed
     widths[1] = math.max(140, math.min(available, math.floor((width - 2 * PAD) * 0.48)))
     local spare = math.max(0, available - widths[1])
-    for i = 2, count do widths[i] = widths[i] + math.floor(spare / (count - 1)) end
+    for i = 2, columnCount do widths[i] = widths[i] + math.floor(spare / (columnCount - 1)) end
     local x = {ICON_SPACE}
-    for i = 2, count do x[i] = x[i - 1] + widths[i - 1] end
+    for i = 2, columnCount do x[i] = x[i - 1] + widths[i - 1] end
     local align = {}
-    for i = 1, count do align[i] = (i == 1 or LEFT_ALIGNED[columns[i][1]]) and "LEFT" or "RIGHT" end
+    for i = 1, columnCount do align[i] = (i == 1 or LEFT_ALIGNED[columns[i][1]]) and "LEFT" or "RIGHT" end
     for i, header in ipairs(frame.headers) do
         header:ClearAllPoints()
-        if i <= count then
+        if i <= columnCount then
             header:SetPoint("TOPLEFT", PAD + x[i], HEADER_Y)
             header:SetWidth(widths[i] - 10)
             header.text:SetJustifyH(align[i])
@@ -259,7 +259,7 @@ local function layout()
         row:SetWidth(width - 2 * PAD)
         for c, cell in ipairs(row.cells) do
             cell:ClearAllPoints()
-            if c <= count then
+            if c <= columnCount then
                 cell:SetPoint("LEFT", x[c], 0)
                 cell:SetWidth(widths[c] - 10)
                 cell:SetJustifyH(align[c])
