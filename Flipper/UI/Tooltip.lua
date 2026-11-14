@@ -50,7 +50,7 @@ local function addSalesLines(tooltip, data)
     end
 end
 
--- "Used in: Tailoring 125 Silk Bag x3" for every shipped recipe that takes this item.
+-- "Tailoring 125: Silk Bag x3" for every recipe Flipper knows of that takes this item.
 -- Your own professions come first; green means you have the skill for it.
 local USED_IN_SHOWN, USED_IN_SHIFT = 5, 20
 local usedIn
@@ -66,7 +66,19 @@ local function recipesUsing(itemID)
             end
         end
     end
-    return usedIn[itemID]
+    -- The shipped data only has recipes taught by an item (patterns, plans...). Recipes you
+    -- learned from a trainer come from your own profession windows.
+    local uses, have = {}, {}
+    for _, use in ipairs(usedIn[itemID] or {}) do uses[#uses + 1] = use; have[use.name:lower()] = true end
+    for _, recipe in ipairs(ns.Recipes.UsingReagent(itemID)) do
+        if recipe.name and not have[recipe.name:lower()] then
+            have[recipe.name:lower()] = true
+            local qty = 0
+            for _, reagent in ipairs(recipe.reagents) do if reagent[1] == itemID then qty = qty + reagent[2] end end
+            uses[#uses + 1] = {profession = recipe.profession or "?", skill = 0, name = recipe.name, qty = qty, known = true}
+        end
+    end
+    return #uses > 0 and uses or nil
 end
 
 local function addUsedInLines(tooltip, data)
@@ -88,7 +100,8 @@ local function addUsedInLines(tooltip, data)
         local skill = mine[use.profession]
         local r, g, b = 0.6, 0.6, 0.6
         if skill and skill >= use.skill then r, g, b = 0.29, 0.87, 0.5 elseif skill then r, g, b = 0.97, 0.44, 0.44 end
-        tooltip:AddLine(string.format("  %s %d: %s x%d", use.profession, use.skill, use.name, use.qty), r, g, b)
+        local level = use.known and "(known)" or tostring(use.skill)
+        tooltip:AddLine(string.format("  %s %s: %s x%d", use.profession, level, use.name, use.qty), r, g, b)
     end
     if #uses > limit then
         tooltip:AddLine(string.format("  +%d more%s", #uses - limit, IsShiftKeyDown() and "" or " (hold Shift)"), 0.6, 0.6, 0.6)
