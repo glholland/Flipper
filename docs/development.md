@@ -55,7 +55,13 @@ pip install lupa
 python tests/run_tests.py --syntax
 ```
 
-This runs `tests/test_logic.lua` under Lua 5.1 and compiles every file in the TOC. UI code is not covered; check it in game.
+This runs, under Lua 5.1:
+
+- `tests/test_logic.lua`: the pure pricing, sales and disenchant rules.
+- `tests/test_scans.lua`: scenarios that drive the real `Scanner` and `Market` code against `tests/fake_wow.lua`, a stand-in for the client's auction house API, clock and timers, and Auctionator's scan frames. Covered: full scans with and without Auctionator, shared cooldowns, scans Auctionator starts itself, adopting its summary scan, batched reading, the AH closing or not answering, sales counted between two scans, and when auto quick scan runs.
+- With `--syntax`, every file in the TOC is compiled.
+
+The fake is only as accurate as our understanding of the API: when the real client behaves differently, fix `fake_wow.lua` along with the code. UI code is not covered; check it in game.
 
 ## CI
 

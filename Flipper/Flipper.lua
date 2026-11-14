@@ -31,6 +31,7 @@ local function onPricesUpdated()
 end
 function events.PLAYER_LOGIN()
     ns.Scanner.InstallHooks()
+    ns.Market.InstallHooks()
     -- Shift-click an item link while the History tab is open to show that item.
     if HandleModifiedItemClick and hooksecurefunc then
         hooksecurefunc("HandleModifiedItemClick", function(link)
@@ -47,10 +48,17 @@ function events.PLAYER_LOGIN()
         pcall(api.RegisterForDBUpdate, ns.CALLER_ID, onPricesUpdated)
     end
 end
+-- Auto quick scan, a few seconds after the AH opens (Auctionator starts its own autoscan
+-- 0-2 s after opening; by then it has, and Flipper reads that instead).
+local AUTO_DELAY = 3
+
 function events.AUCTION_HOUSE_SHOW()
     ns.Scanner.InstallHooks()
+    ns.Market.InstallHooks()
     ns.Window.OnAuctionHouseShow()
     refresh()
+    local openedAt = GetTime()
+    C_Timer.After(AUTO_DELAY, function() ns.Scanner.MaybeAutoScan(openedAt) end)
 end
 function events.AUCTION_HOUSE_CLOSED()
     ns.Scanner.OnEvent("AUCTION_HOUSE_CLOSED")
@@ -101,7 +109,7 @@ frame:SetScript("OnUpdate", function(_, delta)
     ns.Window.UpdateProgress()
     if sinceSecond >= 1 then
         sinceSecond = 0
-        ns.Window.UpdateMarketButton()
+        ns.Window.UpdateScanButtons()
     end
 end)
 
@@ -110,20 +118,27 @@ local commands = {
     deals = function() ns.Window.Toggle("deals") end,
     flips = function() ns.Window.Toggle("flips") end,
     vendor = function() ns.Window.Toggle("vendor") end,
-    market = function() ns.Window.Toggle("flips"); ns.Market.Start() end,
+    market = function() ns.Market.Start() end,
+    full = function() ns.Market.Start() end,
     bags = function() ns.Window.Toggle("bags") end,
     crafts = function() ns.Window.Toggle("crafts") end,
     recipes = function() ns.Window.Toggle("recipes") end,
     verify = function() ns.RecipeShop.Verify() end,
     reset = function() ns.Window.ResetGeometry(); ns.Print("window size and position reset") end,
-    scan = function() ns.Window.Toggle("flips"); ns.Scanner.Start() end,
+    scan = function() ns.Scanner.Start() end,
+    quick = function() ns.Scanner.Start() end,
+    auto = function()
+        FlipperDB.autoQuickScan = not FlipperDB.autoQuickScan
+        ns.Print("auto quick scan when the AH opens " .. (FlipperDB.autoQuickScan and "on" or "off"))
+        refresh()
+    end,
     tooltip = function()
         FlipperDB.tooltip = not FlipperDB.tooltip
         ns.Print("tooltip lines " .. (FlipperDB.tooltip and "on" or "off"))
     end,
 }
 local function help()
-    ns.Print("/flip - window | /flip deals | /flip scan | /flip market (full scan for sales) | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip history [item] |/flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
+    ns.Print("/flip - window | /flip deals | /flip quick (quick scan) | /flip full (full scan) | /flip auto | /flip vendor | /flip bags | /flip crafts | /flip recipes [all] | /flip history [item] |/flip verify | /flip reset | /flip tooltip | /flip minprofit <copper>")
 end
 SLASH_FLIPPER1 = "/flip"
 SLASH_FLIPPER2 = "/flipper"

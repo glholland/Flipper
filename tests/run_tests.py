@@ -34,6 +34,27 @@ def load(lua, ns, path):
     return chunk("Flipper", ns)
 
 
+SCAN_MODULES = ("Core/Init.lua", "Core/Money.lua", "Core/Logic.lua", "Core/Compat.lua",
+                "Core/Scanner.lua", "Core/Market.lua")
+
+
+def run_scan_tests():
+    """Scenario tests: the real Scanner and Market code against tests/fake_wow.lua."""
+    lua = lua51.LuaRuntime(unpack_returned_tuples=True)
+    compile_ = lua.execute("return function(src, name) return assert(loadstring(src, name)) end")
+    fake = compile_((ROOT / "tests" / "fake_wow.lua").read_text(encoding="utf-8"), "@fake_wow.lua")()
+    ns = lua.table()
+    for name in SCAN_MODULES:
+        load(lua, ns, ADDON / name)
+    test = compile_((ROOT / "tests" / "test_scans.lua").read_text(encoding="utf-8"), "@test_scans.lua")
+    passed, failures = test(fake, ns)
+    failures = list(failures.values()) if failures else []
+    for f in failures:
+        print("FAIL", f)
+    print(f"scans: {passed} passed, {len(failures)} failed")
+    return failures
+
+
 def main():
     lua = lua51.LuaRuntime(unpack_returned_tuples=True)
     ns = lua.table()
@@ -47,7 +68,9 @@ def main():
     failures = list(failures.values()) if failures else []
     for f in failures:
         print("FAIL", f)
-    print(f"{passed} passed, {len(failures)} failed")
+    print(f"logic: {passed} passed, {len(failures)} failed")
+
+    failures += run_scan_tests()
 
     if "--syntax" in sys.argv:
         bad = 0
