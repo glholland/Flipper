@@ -85,6 +85,9 @@ local function verdict(advice, own, knownCount)
     if advice.action == "craft" then
         return "Craft " .. advice.craftName .. ": " .. Money.Format(advice.perUnit) .. " each"
     end
+    if advice.action == "disenchant" then
+        return "Disenchant it: ~" .. Money.Format(advice.perUnit) .. " in materials"
+    end
     if #own > 0 then
         local professions, seen = {}, {}
         for _, use in ipairs(own) do
@@ -136,6 +139,64 @@ local function addDetails(tooltip, itemID)
     end
 end
 
+-- For gear: what it disenchants into and the enchants those materials go into.
+-- "Disenchants into Small Glowing Shard" then "  Enchanting 100: Enchant Bracer - Lesser
+-- Strength (1 Small Glowing Shard)". Shown to enchanters, and to everyone with Shift held.
+local function enchantUses(outcomes)
+    local mine = FlipperCharDB and FlipperCharDB.professions or {}
+    local known = knownRecipeNames()
+    local skill = mine.Enchanting
+    local uses, seen = {}, {}
+    for _, result in ipairs(outcomes) do
+        for _, use in ipairs(recipesUsing(result.itemID)) do
+            if use.profession == "Enchanting" and not seen[use.name] then
+                seen[use.name] = true
+                uses[#uses + 1] = {profession = use.profession, name = use.name, skill = use.skill, qty = use.qty,
+                    material = result.itemID, known = known[use.name:lower()] or false}
+                local u = uses[#uses]
+                if skill then
+                    u.reach = u.known or (u.skill > 0 and skill >= u.skill)
+                    u.tooHard = u.skill > skill
+                end
+            end
+        end
+    end
+    table.sort(uses, function(a, b)
+        if a.known ~= b.known then return a.known end
+        if a.skill ~= b.skill then return a.skill < b.skill end
+        return a.name < b.name
+    end)
+    return uses
+end
+
+local function addDisenchantLines(tooltip, outcomes, shift)
+    local names = {}
+    for _, result in ipairs(outcomes) do
+        local name = ns.Compat.ItemInfo(result.itemID)
+        if name then
+            local chance = result.chance < 100 and string.format(" (%s%%)", result.chance) or ""
+            names[#names + 1] = name .. chance
+        end
+    end
+    if #names == 0 then return end
+    tooltip:AddLine("  Disenchants into " .. table.concat(names, ", "), 0.75, 0.52, 0.99)
+    local uses = enchantUses(outcomes)
+    local limit = math.min(#uses, shift and ALL_USES_SHOWN or OWN_USES_SHOWN)
+    for i = 1, limit do
+        local use = uses[i]
+        local r, g, b = 1, 1, 1
+        if use.reach then r, g, b = 0.29, 0.87, 0.5 elseif use.tooHard then r, g, b = 0.97, 0.44, 0.44 end
+        local label = "Enchanting" .. (use.skill > 0 and (" " .. use.skill) or "")
+        local material = ns.Compat.ItemInfo(use.material) or "?"
+        tooltip:AddLine(string.format("  %s: %s (%d %s)%s", label, use.name, use.qty, material,
+            use.known and " (known)" or ""), r, g, b)
+    end
+    if #uses > limit then
+        tooltip:AddLine(string.format("  +%d more enchants%s", #uses - limit, shift and "" or " (hover with Shift held)"),
+            unpack(GREY))
+    end
+end
+
 local function addLines(tooltip, data)
     if not FlipperDB or not FlipperDB.tooltip or not data then return end
     local itemID = data.id
@@ -143,10 +204,12 @@ local function addLines(tooltip, data)
     local advice = ns.Bags.Advice(itemID)
     local own, others, knownCount = sortedUses(itemID)
     local text = verdict(advice, own, knownCount)
-    -- Nothing to say: no line at all (other professions' uses still show with Shift).
-    if not text and not (IsShiftKeyDown() and #others > 0) then return end
-    tooltip:AddLine(TAG .. (text or "No use for your professions"), 1, 1, 1)
     local shift = IsShiftKeyDown()
+    local outcomes = (shift or ns.Disenchant.Known()) and ns.Disenchant.ForItem(itemID) or nil
+    -- Nothing to say: no line at all (other professions' uses still show with Shift).
+    if not text and not outcomes and not (shift and #others > 0) then return end
+    tooltip:AddLine(TAG .. (text or "No use for your professions"), 1, 1, 1)
+    if outcomes then addDisenchantLines(tooltip, outcomes, shift) end
     if shift then addDetails(tooltip, itemID) end
     local shown = 0
     for i = 1, math.min(#own, shift and ALL_USES_SHOWN or OWN_USES_SHOWN) do useLine(tooltip, own[i]); shown = shown + 1 end

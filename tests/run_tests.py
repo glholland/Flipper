@@ -38,7 +38,7 @@ def main():
     lua = lua51.LuaRuntime(unpack_returned_tuples=True)
     ns = lua.table()
     # Pure modules only need these.
-    for name in ("Core/Init.lua", "Core/Money.lua", "Core/Logic.lua"):
+    for name in ("Core/Init.lua", "Core/Money.lua", "Core/Logic.lua", "Core/Disenchant.lua"):
         load(lua, ns, ADDON / name)
     test = lua.execute(
         "return function(src) return assert(loadstring(src, '@test_logic.lua')) end"
