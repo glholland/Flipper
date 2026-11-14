@@ -4,11 +4,15 @@
 ## Author: glholland
 ## Version: 0.1.0
 ## IconTexture: 133784
+## AddonCompartmentFunc: Flipper_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: Flipper_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: Flipper_OnAddonCompartmentLeave
 ## OptionalDeps: Auctionator, Questie, QuestieDB, Journalator, Journalator_Statistics, TradeSkillMaster
 ## SavedVariables: FlipperDB
 ## SavedVariablesPerCharacter: FlipperCharDB
 
 Core\Init.lua
+Core\Settings.lua
 Data\RecipeDB.lua
 Data\BuyPriceDB.lua
 Data\CraftDB.lua
@@ -27,4 +31,6 @@ Core\Vendors.lua
 Core\RecipeShop.lua
 UI\Window.lua
 UI\Tooltip.lua
+UI\Options.lua
+UI\Minimap.lua
 Flipper.lua

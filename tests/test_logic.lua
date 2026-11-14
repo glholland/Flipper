@@ -172,4 +172,75 @@ eq("DE no prices", DE.ExpectedValue(armor, function() return nil end), nil)
 eq("best use disenchant", Logic.BestUse{vendor = 100, ah = 50, disenchant = 200, cut = 0.05}.action, "disenchant")
 eq("vendor beats weak disenchant", Logic.BestUse{vendor = 4131, disenchant = 1172, cut = 0.05}.action, "vendor")
 
+-- Money.Parse
+eq("parse copper", Money.Parse("120"), 120)
+eq("parse gold silver copper", Money.Parse("1g 20s 5c"), 12005)
+eq("parse no spaces", Money.Parse("2s50c"), 250)
+eq("parse decimal gold", Money.Parse("1.5g"), 15000)
+eq("parse upper case", Money.Parse("3S"), 300)
+eq("parse formatted text", Money.Parse(Money.Format(12345)), 12345)
+eq("parse junk", Money.Parse("lots"), nil)
+eq("parse mixed junk", Money.Parse("5g x"), nil)
+eq("parse empty", Money.Parse(""), nil)
+
+-- Settings: one place to read and write every setting
+local Settings = ns.Settings
+FlipperDB = ns.ApplyDefaults(nil, ns.DEFAULTS)
+local changes = {}
+Settings.OnChanged = function(key, value) changes[#changes + 1] = key .. "=" .. tostring(value) end
+eq("defaults: deal ratio", Settings.Get("dealRatio"), 0.7)
+eq("defaults: button shown", Settings.Get("showMinimap"), true)
+eq("defaults: button unlocked", Settings.Get("lockMinimap"), false)
+eq("defaults: button position", FlipperDB.minimap.minimapPos, 200)
+eq("hide button", Settings.Toggle("showMinimap"), false)
+eq("hidden is LibDBIcon's hide flag", FlipperDB.minimap.hide, true)
+eq("show button again", Settings.Set("showMinimap", true), true)
+eq("shown clears hide", FlipperDB.minimap.hide, false)
+eq("lock", Settings.Set("lockMinimap", 1), true)
+eq("lock flag", FlipperDB.minimap.lock, true)
+eq("unlock removes the flag", (Settings.Set("lockMinimap", false) == false) and FlipperDB.minimap.lock, nil)
+eq("toggle tooltip off", Settings.Toggle("tooltip"), false)
+eq("tooltip saved", FlipperDB.tooltip, false)
+eq("money floors", Settings.Set("minFlipProfit", 12.9), 12)
+eq("money clamps low", Settings.Set("minFlipProfit", -5), 1)
+eq("money refuses junk", Settings.Set("minFlipProfit", "abc"), nil)
+eq("refused value leaves the old one", FlipperDB.minFlipProfit, 1)
+eq("ratio clamps high", Settings.Set("dealRatio", 2), 0.95)
+eq("ratio clamps low", Settings.Set("dealRatio", 0), 0.3)
+eq("unknown key", Settings.Set("nope", 1), nil)
+eq("every change reported", #changes, 9)
+eq("change names its key", changes[1], "showMinimap=false")
+eq("format percent", Settings.Format("dealRatio", 0.7), "70%")
+eq("format toggle", Settings.Format("autoQuickScan", true), "on")
+local saved = ns.ApplyDefaults({minimap = {minimapPos = 45, hide = true}, dealRatio = 0.8}, ns.DEFAULTS)
+eq("old saves keep their button position", saved.minimap.minimapPos, 45)
+eq("old saves keep hide", saved.minimap.hide, true)
+eq("old saves keep their ratio", saved.dealRatio, 0.8)
+eq("saves without the new keys get them", ns.ApplyDefaults({}, ns.DEFAULTS).dealRatio, 0.7)
+for _, setting in ipairs(Settings.LIST) do
+    eq("has label and tip: " .. setting.key, setting.label ~= nil and setting.tip ~= nil, true)
+end
+Settings.OnChanged = nil
+FlipperDB = nil
+
+-- Minimap rim position (degrees, 0 = right, counter-clockwise, like LibDBIcon)
+local function near(name, got, want) eq(name, math.abs(got - want) < 0.001, true) end
+local x, y = Settings.RimOffset(0, 75, "ROUND")
+near("rim right x", x, 75); near("rim right y", y, 0)
+x, y = Settings.RimOffset(90, 75, "ROUND")
+near("rim top x", x, 0); near("rim top y", y, 75)
+x, y = Settings.RimOffset(225, 75, "ROUND")
+near("rim bottom-left on the circle", x * x + y * y, 75 * 75)
+x, y = Settings.RimOffset(45, 75, "SQUARE")
+near("square: corner x", x, 75); near("square: corner y", y, 75)
+x, y = Settings.RimOffset(0, 75, "SQUARE")
+near("square: side x", x, 75); near("square: side y", y, 0)
+x, y = Settings.RimOffset(nil, 75)
+near("no saved position: default spot", x * x + y * y, 75 * 75)
+near("angle right", Settings.AngleFrom(10, 0), 0)
+near("angle up", Settings.AngleFrom(0, 10), 90)
+near("angle down wraps to 270", Settings.AngleFrom(0, -10), 270)
+x, y = Settings.RimOffset(Settings.AngleFrom(-3, 4), 50, "ROUND")
+near("angle round-trips x", x, -30); near("angle round-trips y", y, 40)
+
 return passed, failures

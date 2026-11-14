@@ -29,3 +29,18 @@ function Money.FormatSigned(copper)
     if copper < 0 then return "-" .. Money.Format(-copper) end
     return Money.Format(copper)
 end
+
+-- "1g 20s 5c", "1g20s", "35s", "1.5g" or plain copper ("120") -> copper, or nil.
+function Money.Parse(text)
+    if type(text) ~= "string" then return nil end
+    text = text:lower():gsub("|t.-|t", ""):gsub("%s+", "")
+    if text == "" then return nil end
+    if text:match("^%d+$") then return tonumber(text) end
+    local total, rest = 0, text
+    for amount, unit in text:gmatch("(%d+%.?%d*)([gsc])") do
+        total = total + tonumber(amount) * (unit == "g" and 10000 or unit == "s" and 100 or 1)
+    end
+    rest = rest:gsub("%d+%.?%d*[gsc]", "")
+    if rest ~= "" or total <= 0 then return nil end
+    return math.floor(total + 0.5)
+end
